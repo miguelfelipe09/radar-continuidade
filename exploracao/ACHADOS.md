@@ -1,0 +1,501 @@
+# Achados da exploração
+
+Registro das consultas de exploração feitas sobre os arquivos Parquet da ANEEL
+e das decisões de modelagem que cada resultado gerou.
+
+**Data:** 18/09/2026
+**Ferramenta:** DuckDB. Consultas em [`01-layouts.sql`](01-layouts.sql),
+[`02-grao.sql`](02-grao.sql), [`03-chave-natural.sql`](03-chave-natural.sql),
+[`04-denominador.sql`](04-denominador.sql), [`05-series.sql`](05-series.sql),
+[`06-expurgo-causa.sql`](06-expurgo-causa.sql) e
+[`07-pendentes.sql`](07-pendentes.sql).
+
+**Regra:** todo número aqui veio de uma consulta que rodou. Nada estimado.
+
+---
+
+## 1. A base mudou de estrutura em 2026
+
+O arquivo de 2026 tem schema completamente diferente dos anteriores.
+
+| Ano | Linhas | Layout |
+|---|---|---|
+| 2017 | 3.474.016 | antigo |
+| 2023 | 9.177.911 | antigo |
+| 2024 | 9.211.251 | antigo |
+| 2025 | 9.715.372 | antigo |
+| 2026 | 6.078.331 (competências 202601 a 202607) | **novo** |
+
+O layout antigo (18 colunas) é idêntico de 2017 a 2025. O novo tem 26 colunas.
+
+**Apenas 6 colunas são comuns às duas eras** (`DatGeracaoConjuntoDados`,
+`DscConjuntoUnidadeConsumidora`, `DatInicioInterrupcao`, `DatFimInterrupcao`,
+`NumNivelTensao`, `SigAgente`). São 20 colunas exclusivas do layout novo e 12 do
+antigo. Não foi ajuste de campo — foi reformulação da base.
+
+O layout novo traz o que não existia antes: código IBGE do município, motivo de
+expurgo, taxonomia de causa em 4 níveis, código de evento e de ocorrência,
+competência explícita.
+
+**Decisão:** o ETL tem dois adaptadores, um por layout, convergindo para um
+modelo canônico. Não é opcional — o layout antigo carrega a história e o novo
+recebe as atualizações mensais.
+
+### Mapeamento canônico
+
+| Canônico | 2017–2025 | 2026+ |
+|---|---|---|
+| `conjunto_id` | `IdeConjuntoUnidadeConsumidora` | `CodConjUnidadeConsumidora` |
+| `distribuidora_cnpj` | `NumCPFCNPJ` | `NumCNPJDistribuidora` |
+| `consumidores_afetados` | `NumUnidadeConsumidora` | `QtdConsumidoresAfetados` |
+| `consumidores_ativos` | `NumConsumidorConjunto` | `QtdConsumidoresAtivos` |
+| `cod_interrupcao` | `NumOrdemInterrupcao` | `CodInterrupcao` |
+| `alimentador` | `DscAlimentadorSubestacao` | `CodAlimentador` |
+| `tipo` | `DscTipoInterrupcao` | `DscFatoGeradorTipo` |
+| `causa_bruta` | `DscFatoGeradorInterrupcao` | `DscFatoGerador*` (4 campos) |
+| `competencia` | derivar de `DatInicioInterrupcao` | `AnoCompetencia` / `MesCompetencia` |
+| `municipio_ibge` | — não existe — | `CodMunicipioIBGE` |
+| `motivo_expurgo` | — não existe — | `DscMotivoExpurgo` |
+
+> A competência é o único campo cujo caminho difere de fato entre os
+> adaptadores: no layout novo vem pronta, no antigo é derivada da data de
+> início. Isso afeta o parâmetro `--ate-competencia` da ingestão.
+
+---
+
+## 2. Grão de análise: conjunto elétrico
+
+Pré-requisito verificado: os CNPJs batem entre as eras (52 em 2025, 51 em 2026,
+**51 em comum**), então as intersecções abaixo são válidas.
+
+| Entidade | 2025 | 2026 | em ambos |
+|---|---|---|---|
+| alimentadores `(cnpj, código)` | 26.437 | 29.560 | 14.054 (**53%**) |
+| **conjuntos elétricos** | **3.101** | **3.124** | **3.007 (97%)** |
+
+Os códigos de alimentador têm formatos heterogêneos nas duas eras
+(`GM-07`, `01N4` em 2025; `MOG18`, `NHA01_AL007` em 2026) e metade não
+sobrevive à virada. Colisão entre distribuidoras é baixa (25.729 códigos
+isolados contra 26.437 pares com CNPJ, 2,7%), então a perda é real, não
+artefato de contagem.
+
+**Decisão: o grão de análise é o conjunto elétrico.** Duas razões:
+
+1. 97% de continuidade contra 53% — metade dos alimentadores perderia história.
+2. **O denominador só existe nesse nível.** Consumidores ativos é uma contagem
+   do conjunto, não do alimentador. Sem ele não há indicador normalizado, e a
+   fila de investigação fica sem critério de priorização.
+
+É também o nível em que a ANEEL apura DEC e FEC.
+
+O alimentador fica como detalhe de drill-down dentro do conjunto.
+
+Conjuntos que existem em apenas uma era: 94 só em 2025, 117 só em 2026.
+Compatível com revisão tarifária e com o ano parcial de 2026.
+
+---
+
+## 3. As duas eras produzem números comparáveis
+
+Teste mais importante da exploração: mesmos conjuntos, mesmos meses (jan–jul),
+2025 contra 2026.
+
+```
+pares comparados:         20.210
+razão de eventos:          1,050
+razão de consumidor-hora:  1,035
+```
+
+Diferença de ~4%, compatível com variação real ano a ano. **A série histórica
+atravessa a mudança de formato.**
+
+Mediana do DEC aproximado por conjunto-mês:
+
+| Mês | 2025 | 2026 |
+|---|---|---|
+| Jan | 1,64 | 1,35 |
+| Fev | 1,14 | 1,41 |
+| Mar | 1,07 | 1,09 |
+| Abr | 0,93 | 0,94 |
+| Mai | 0,79 | 0,83 |
+| Jun | 0,76 | 0,77 |
+| Jul | 0,73 | 0,83 |
+
+**Sazonalidade confirmada:** curva decrescente de janeiro a agosto e ascendente
+no fim do ano (set 1,07 / out 1,11 / nov 1,13 / dez 1,56 em 2025), repetida nas
+duas eras. Isso justifica comparar contra o **mesmo mês de anos anteriores** em
+vez de contra o mês anterior.
+
+**Sanidade do indicador** (distribuição do DEC aproximado, 2026):
+
+```
+p50: 0,985    p90: 3,807    p99: 10,878    máx: 51,52   (h/consumidor/mês)
+```
+
+Mediana de ~0,99 h/mês equivale a ~12 h/ano — ordem de grandeza correta para
+distribuição no Brasil. Fórmula validada. A cauda (p99 de 10,9 h/mês) são
+conjuntos com continuidade realmente ruim, provavelmente rurais: exatamente o
+que a fila de investigação deve pescar.
+
+---
+
+## 4. Denominador (consumidores ativos)
+
+Confirmado que `NumUnidadeConsumidora` = afetados e `NumConsumidorConjunto` =
+ativos no conjunto. Afetados excedendo ativos é ruído nas duas eras:
+
+```
+layout antigo (2025):  49 linhas em 9.715.372  (0,0005%)
+layout novo   (2026):  11 linhas em 6.078.331  (0,0002%)
+```
+
+Estabilidade dentro de conjunto-mês (2025): **658 inconsistentes em 36.838
+grupos (1,8%)**. Na amostra, `min = max = moda` na quase totalidade dos meses —
+a ANEEL trata consumidores ativos como valor de referência mensal do conjunto,
+não como contagem no instante da interrupção. É o comportamento esperado do
+denominador de DEC/FEC.
+
+Amplitude da variação ao longo do ano (razão max/min por conjunto):
+
+```
+p50: 1,0215    p95: 1,1499    p99: 1,4903    máx: 1.018,38
+acima de 3x: 5 conjuntos em 3.101
+```
+
+Mediana de 1,02x é crescimento normal da base de consumidores.
+
+### Os 5 casos extremos são reconfiguração de conjuntos
+
+| Conjunto | mín | máx | razão |
+|---|---|---|---|
+| 17402 | 39 | 39.717 | 1.018x |
+| 15737 | 3.457 | 28.295 | 8,2x |
+| 14503 | 752 | 5.077 | 6,8x |
+| 17238 | 2.362 | 9.809 | 4,2x |
+| 16489 | 4.510 | 14.563 | 3,2x |
+
+Aplicando o corte por conjunto-mês, **13 conjunto-mês ficam fora, todos em
+jan/fev/mar de 2025**. Em 4 dos 5 conjuntos o valor salta em abril e não volta;
+o 15737 faz o inverso, perdendo ~25 mil consumidores enquanto o 17402 ganha
+~38 mil.
+
+Não é dado sujo: é **redesenho de conjuntos com vigência em abril de 2025**,
+com consumidores migrando entre eles.
+
+**Decisão:** usar a **moda** de consumidores ativos dentro de cada
+conjunto-mês. Descartar do indicador normalizado o conjunto-mês cujo valor de
+ativos destoe mais de 3x (para mais ou para menos) da mediana anual do próprio
+conjunto — 13 casos em 36.838. O corte é por mês, não por conjunto inteiro: um
+conjunto com 11 meses bons e 1 quebrado deve perder só o mês ruim.
+
+Marcar o conjunto como tendo sofrido reconfiguração no período, para que a fila
+de investigação apresente uma nota em vez de um alerta — mudança administrativa
+não é anomalia operacional.
+
+---
+
+## 5. Chave natural — regras diferentes por era
+
+### Layout novo (2026)
+
+```
+linhas:                               6.078.331
+(cnpj, cod_interrupcao, dat_inicio):  6.077.033  →  1.298 duplicatas (0,02%)
++ alimentador:                        6.077.033  →  não ajuda
+```
+
+Concentradas em 3 distribuidoras:
+
+| Distribuidora | Linhas envolvidas |
+|---|---|
+| CPFL Jaguari | 1.954 |
+| COCEL | 614 |
+| COPEL-DIS | 28 |
+
+São **dois fenômenos distintos**, não um:
+
+- **Precisão inconsistente** (CPFL Jaguari): mesma ocorrência enviada com
+  `DatFimInterrupcao` truncado no minuto e com segundos (`07:01:00` e
+  `07:01:16`).
+- **Envio repetido** (COCEL, COPEL-DIS): linhas idênticas, inclusive no
+  `DatFimInterrupcao`.
+
+A contagem confirma que não é um-a-um: 1.647 linhas truncadas contra 949 com
+segundos, dentro de 2.596 linhas em grupos duplicados.
+
+**Decisão:** índice único em `(distribuidora_cnpj, cod_interrupcao,
+dat_inicio)`. Deduplicar no ETL com `row_number()` priorizando a linha de maior
+precisão (`second(dat_fim) <> 0`) e desempatando por `dat_fim DESC` —
+determinístico e resolve os dois fenômenos. Verificado: 6.077.033 mantidas,
+**1.298 descartadas**. Contabilizar em `pipeline_runs`.
+
+### Layout antigo (2025)
+
+Nenhuma combinação de colunas torna a linha única:
+
+```
+linhas:            9.715.372
++ data:            9.158.711
++ conjunto:        9.238.841
++ alimentador:     9.277.098
+```
+
+Mas isso **não são duplicatas**. Das 9.277.098 ocorrências distintas,
+**9.010.648 (97%) têm linha única**; a média é de 1,05 linhas por ocorrência,
+com máximo de 81.
+
+O desdobramento tem naturezas diferentes e a semântica exata não foi
+determinada. Exemplos observados:
+
+```
+PCA13, início 11:47:11 → fins 17:25:11 (134 afetados) e 17:44:06 (1 afetado)
+QLB09, início 09:00:15 → mesmo fim 12:30:16, com 1 e 75 afetados
+```
+
+O primeiro parece recomposição em etapas; o segundo, separação por trecho ou
+classe de consumidor, já que o fim é idêntico.
+
+**Decisão:** somar as linhas está correto para consumidor-hora
+independentemente da causa do desdobramento. Adicionar coluna de sequência à
+chave: `row_number()` particionado por
+`(cnpj, ordem, conjunto, alimentador, inicio)` ordenado por
+`(dat_fim, afetados)`.
+
+**Verificado: a chave fecha — 9.715.372 linhas, 9.715.372 chaves distintas.**
+Mantém idempotência sem chave sintética aleatória.
+
+---
+
+## 6. Expurgos — só existem no layout novo
+
+Distribuição de `DscMotivoExpurgo` em 2026:
+
+| Motivo | Linhas | % |
+|---|---|---|
+| Não houve Expurgo | 4.581.585 | 75,38% |
+| ISE por meio de CHI | 815.599 | 13,42% |
+| Interrupção em Dia Crítico | 360.848 | 5,94% |
+| Falha na instalação da UC sem afetar terceiros | 235.415 | 3,87% |
+| Suspensão por inadimplemento | 46.536 | 0,77% |
+| Origem externa ao sistema de distribuição | 23.123 | 0,38% |
+| Obras de interesse exclusivo do usuário | 12.586 | 0,21% |
+| ISE por meio de decreto | 2.580 | 0,04% |
+| Atuação de ERAC (ONS) | 58 | — |
+| Racionamento instituído pela União | 1 | — |
+
+**Total expurgado: 1.496.746 de 6.078.331 (24,62%).**
+
+> ⚠️ **O campo nunca é nulo** (verificado: 0 nulos em 6.078.331). Quando não há
+> expurgo, vem o texto `"Não houve Expurgo"`. Filtrar por `IS NULL` zera o
+> indicador inteiro.
+
+### O expurgo é uniforme entre conjuntos
+
+Taxa de expurgo por conjunto:
+
+```
+p50: 0,256    p90: 0,407    p99: 0,514
+```
+
+Praticamente todo conjunto tem em torno de um quarto das ocorrências
+expurgadas. **É característica sistêmica da base, não marcador regional** — não
+serve para distinguir "rede ruim" de "região de temporal" no drill-down.
+
+Efeito colateral positivo: como o viés é quase constante entre conjuntos,
+filtrar ou não filtrar desloca todos de forma semelhante, sem reordenar
+significativamente o ranking.
+
+No layout antigo não há equivalente. `DscTipoInterrupcao` só separa:
+
+```
+Não Programada:  9.194.331
+Programada:        521.041
+```
+
+E `IdeMotivoInterrupcao` tem 9 valores, 76% deles em `0`, sem correspondência
+com as categorias de expurgo de 2026.
+
+**Decisão:** preservar no banco (`motivo_expurgo` texto, `expurgado` booleano
+derivado), não descartar na ingestão.
+
+**Para a série histórica, calcular o indicador SEM filtro de expurgo em todas
+as competências**, inclusive 2026. Motivo: 2024–2025 não têm expurgo
+identificável, e filtrar só o período recente faria 2026 parecer
+artificialmente melhor. O indicador filtrado fica disponível apenas nas telas
+restritas a 2026+.
+
+---
+
+## 7. Causa da interrupção — não normalizar no MVP
+
+`DscFatoGeradorInterrupcao` (2025) tem **705 valores distintos** para o que em
+2026 são 4 campos com cardinalidade 2 / 2 / 9 / 34.
+
+É a mesma hierarquia concatenada, mas cada distribuidora escreve do seu jeito:
+
+```
+INTERNA;NAO PROGRAMADA;PROPRIAS DO SISTEMA;FALHA DE MATERIAL OU EQUIPAMENTO
+Interna-Não programada-Próprias do sistema-Falha de material ou equipamento
+INTERNA - NAO PROGRAMADA - PROPRIAS DO SISTEMA - FALHA DE MATERIAL OU EQUIPAMENTO
+INTERNO - NAO PROGRAMADA - PROPRIAS DO SISTEMA - FALHA DE MATERIAL OU EQUIPAMENTO
+```
+
+Separador `;`, `-` ou ` - `; com e sem acento; caixa variada; e pelo menos um
+erro de grafia (`INTERNO` em vez de `INTERNA`).
+
+Padronizando caixa, acento e separador, a cardinalidade cai de **705 para
+286** — ainda muito distante dos ~34 detalhes do layout novo, porque sobram
+diferenças de vocabulário entre distribuidoras.
+
+**Decisão:** armazenar o texto bruto. Causa não entra no indicador nem na
+detecção de anomalia; aparece apenas na tela de detalhe. Normalização completa
+fica como melhoria futura.
+
+---
+
+## 8. Cobertura por competência
+
+Contagem de conjuntos por mês, como percentual do mês de maior cobertura:
+
+```
+meses completos:      91,5% a 100%
+dez/2025 (era nova):   1 conjunto   (0,0%)
+ago/2026:             25 conjuntos  (0,8%)
+```
+
+Os dois casos extremos são eventos vazando pelas bordas do arquivo — o arquivo
+de 2026 vai só até a competência 202607.
+
+**Decisão:** filtrar por competência, não por data de início. Descartar do
+baseline e da fila de investigação a competência cuja cobertura fique abaixo de
+**50% da cobertura máxima** — corte simples que pega os dois casos sem risco de
+excluir mês legítimo (o mais baixo entre os completos é fev/2026, com 91,5%).
+
+Comparações devem ser sempre por conjunto, nunca por total agregado, para que
+diferença de cobertura entre meses não entre no cálculo.
+
+---
+
+## 9. Duração das interrupções
+
+Layout novo (2026), sobre 6.058.032 registros com data de fim:
+
+```
+duração negativa:        0
+duração zero:        4.959
+acima de 24h:      220.064  (3,63%)
+acima de 7 dias:       843  (0,01%)
+mediana:               197 min
+p95:                 1.294 min
+máximo:            216.106 min  (~150 dias)
+
+sem DatFimInterrupcao: 20.299 registros
+```
+
+Layout antigo (2025): 0 negativas, 409.260 acima de 24h, mediana 208 min,
+máximo 70.568 min (~49 dias).
+
+Mediana de ~3h e 3,6% acima de 24h são valores altos para interrupção de
+distribuição, mas consistentes entre as duas eras e plausíveis em área rural,
+onde o religamento pode levar dias.
+
+**Decisão:** não descartar por duração. Gravar tudo e marcar
+`duracao_suspeita` acima de 7 dias. Descartar apenas os registros **sem data de
+fim** (20.299 em 2026), já que sem fim não há consumidor-hora calculável.
+Contabilizar em `pipeline_runs`.
+
+---
+
+## 10. Município (só no layout novo)
+
+```
+com 7 dígitos:   5.982.075  (98,4%)  → válidos
+malformados:        96.256  (1,6%)
+nulos:                   0
+```
+
+Os malformados têm 1, 2, 3, 4 ou 5 dígitos, distribuídos de forma quase
+uniforme — não é zero à esquerda perdido, é campo preenchido com código
+interno.
+
+**Todos os 96.256 vêm de uma única distribuidora: CELG (Goiás).**
+
+Considerando apenas os códigos válidos: **27 UFs e 5.528 municípios** — números
+corretos para o Brasil. A derivação da UF pelos 2 primeiros dígitos funciona.
+
+**Decisão:** aceitar apenas `length = 7`; o restante grava `municipio_ibge` como
+nulo e conta como registro sem município (não como inválido — o conjunto
+elétrico, que é o grão do projeto, continua válido).
+
+---
+
+## 11. Cobertura de distribuidoras
+
+```
+2017:  39 distribuidoras
+2024:  52
+2025:  52
+2026:  51
+```
+
+A base não cobre todos os agentes de distribuição do país — permissionárias e
+cooperativas menores não aparecem. A cobertura cresceu ao longo do tempo, o que
+significa que parte de qualquer "aumento" observado em série longa pode ser
+entrada de distribuidora na base, não piora de rede.
+
+No recorte adotado (2024–2026) a contagem é estável, então o efeito é
+desprezível. Registrar como limitação no README.
+
+---
+
+## 12. Validação de 2024
+
+```
+linhas:           9.211.251
+conjuntos:            3.079
+distribuidoras:          52
+meses:                   12  (01/01 a 31/12)
+```
+
+Continuidade de conjuntos: 3.035 em comum com 2025, 2.941 com 2026. Entra no
+recorte sem ressalva.
+
+---
+
+## Recorte final do projeto
+
+- **Período:** 2024, 2025 e 2026 (~25M de linhas)
+- **Grão:** conjunto elétrico
+- **Indicador:** consumidor-hora ÷ consumidores ativos (DEC aproximado) e
+  afetados ÷ ativos (FEC aproximado)
+- **Baseline de anomalia:** mesmo mês dos anos anteriores, mediana + IQR
+- **Eixo temporal:** competência
+
+> Os indicadores são **aproximações** reconstruídas a partir dos dados brutos.
+> Não são os valores oficiais de DEC/FEC apurados pela ANEEL, que seguem
+> metodologia própria de expurgo e apuração.
+
+### Regras de tratamento consolidadas
+
+| Situação | Tratamento | Volume observado |
+|---|---|---|
+| Duplicata na chave (2026) | dedup determinística | 1.298 |
+| Sem data de fim | descartar | 20.299 (2026) |
+| Município malformado | `municipio_ibge` nulo | 96.256 (2026) |
+| Ativos destoando 3x da mediana | fora do indicador | 13 conjunto-mês (2025) |
+| Competência abaixo de 50% de cobertura | fora do baseline | 2 meses |
+| Duração acima de 7 dias | marcar suspeita, manter | 843 (2026) |
+
+---
+
+## Em aberto
+
+Nada bloqueante. Melhorias possíveis, se sobrar tempo:
+
+- [ ] Normalizar `DscFatoGeradorInterrupcao` do layout antigo para a taxonomia
+      de 4 níveis do novo (705 → 286 com normalização simples; chegar a ~34
+      exige mapeamento manual de vocabulário)
+- [ ] Determinar a semântica do desdobramento de linhas no layout antigo
+      (3% das ocorrências)
+- [ ] Avaliar se 2023 vale ser incluído no recorte (mais 9,2M de linhas, um ano
+      a mais de baseline sazonal)
