@@ -598,13 +598,59 @@ Justifica `bigint` para conjunto e CNPJ, `text` para código de interrupção.
 
 ---
 
+## 14. Verificações durante o motor de anomalias (19/09)
+
+### Corte de volume: 100 consumidores ativos, não 1.000
+
+O corte proposto inicialmente era 1.000 consumidores ativos. Em 07/2026 ele
+removia 6 conjuntos, e olhar quem eram mudou a decisão:
+
+| Conjunto | Nome | Distribuidora | Ativos | DEC aprox |
+|---|---|---|---|---|
+| 0 | *(sem nome)* | COPEL-DIS | 4 | 0,30 |
+| 12863 | MIMOSO | EMS | 711 | 9,02 |
+| 12803 | BONITO CEDERB | EMS | 796 | 16,05 |
+| 12589 | Santa Rosa | EAC | 942 | 4,60 |
+| 15512 | CARAJÁS II | EQUATORIAL PA | 943 | 4,12 |
+| 12658 | São Carlos | ERO | 952 | 9,38 |
+
+Os cinco com nome são **conjuntos rurais legítimos**, com DEC de 4 a 16 h/mês —
+exatamente a cauda que a §3 diz que a fila deve pescar. Um corte de 1.000 os
+tiraria da fila por serem pequenos, que é o oposto do objetivo.
+
+O conjunto **0 da COPEL-DIS** é outro caso: código inválido, sem nome, 4
+consumidores, 49 linhas só no layout novo (fev a jul/2026). É o único conjunto
+sem nome na base. Fica **excluído por identidade**, não por tamanho.
+
+O corte ficou em **100 consumidores ativos**, como guarda contra denominador
+quebrado e não como filtro de tamanho. Na base inteira, só 14 conjunto-mês
+ficam abaixo dele, com 1 a 39 ativos — entre eles o 17402 de jan/2025, já
+marcado como destoante. Não há nada entre 39 e 711: o corte cai num vazio
+natural da distribuição.
+
+### Sigla e nome chegam com espaços à direita
+
+As 52 siglas de distribuidora vêm preenchidas com espaços à direita na
+origem, assim como 5 nomes de conjunto. Filtrar por `sigla = 'LIGHT SESA'`
+não encontra nada.
+
+**Decisão:** aparar os campos de exibição (sigla e nome da distribuidora, nome
+do conjunto) no ETL. **Não** aparar `alimentador`, que tem o mesmo problema:
+ele entra na chave natural, e apará-lo mudaria a chave de linhas já gravadas.
+Só 2 valores em 40.733 colapsariam — não compensa uma recarga de 25M de
+linhas.
+
+---
+
 ## Recorte final do projeto
 
 - **Período:** 2024, 2025 e 2026 (~25M de linhas)
 - **Grão:** conjunto elétrico
 - **Indicador:** consumidor-hora ÷ consumidores ativos (DEC aproximado) e
   afetados ÷ ativos (FEC aproximado)
-- **Baseline de anomalia:** mesmo mês dos anos anteriores, mediana + IQR
+- **Baseline de anomalia:** mediana + IQR sobre a história inteira do
+  conjunto, dessazonalizada por índice mensal apurado só no passado (~29
+  pontos, contra 2 do mesmo mês estrito)
 - **Eixo temporal:** competência
 
 > Os indicadores são **aproximações** reconstruídas a partir dos dados brutos.
@@ -622,7 +668,10 @@ Justifica `bigint` para conjunto e CNPJ, `text` para código de interrupção.
 | CNPJ com 13 dígitos | normalização idêntica nas duas eras | — |
 | Ativos destoando 3x da mediana | fora do indicador | 13 conjunto-mês (2025) |
 | Reconfiguração de conjunto | nota, não alerta | 4 conjuntos (abr/2025) |
-| Competência abaixo de 50% de cobertura | fora do baseline | 2 meses |
+| Competência abaixo de 50% de cobertura | fora do baseline | 0 no recorte (guarda) |
+| Distribuidora abaixo de 50% dos seus conjuntos | fora do baseline dela | 1 (ERO, fev/2025) |
+| Conjunto com menos de 100 ativos | fora da fila | 14 conjunto-mês |
+| Conjunto 0 (COPEL-DIS, sem nome) | fora da fila, por identidade | 1 |
 | Duração acima de 7 dias | manter, só contar | 843 (2026), 1.481 (2025), 5.633 (2024) |
 
 ---
