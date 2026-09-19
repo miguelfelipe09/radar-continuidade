@@ -14,7 +14,7 @@ import time
 import traceback
 from pathlib import Path
 
-from . import aggregate, config, load, runs
+from . import aggregate, anomalies, config, load, runs
 from .download import DownloadError, baixar_ano
 from .transform import layout_do_arquivo, transformar
 
@@ -96,6 +96,7 @@ def cmd_ingest(args) -> int:
                     # contra o mês de maior cobertura, que esta carga pode ter
                     # acabado de mudar.
                     resumo = aggregate.agregar(conn)
+                    deteccao = anomalies.detectar(conn, run_id)
 
                 runs.fechar_run_sucesso(
                     conn_runs, run_id, res.counters,
@@ -107,6 +108,10 @@ def cmd_ingest(args) -> int:
                 print(f"  reconfigurações registradas: {numeros['reconfiguracoes']:,}")
                 print(f"  conjunto-competência:        {resumo['linhas']:,} "
                       f"({resumo['sem_indicador']:,} sem indicador)")
+                ano_c, mes_c = deteccao["competencia"]
+                alertas = sum(n for _, sev, n in deteccao["contagem"]
+                              if sev in ("alta", "moderada"))
+                print(f"  fila {ano_c}-{mes_c:02d}:              {alertas:,} alertas")
                 print(f"  tempo:                       {time.monotonic() - inicio:.1f}s")
             except Exception as erro:
                 runs.fechar_run_falha(conn_runs, run_id, f"{type(erro).__name__}: {erro}")
@@ -131,6 +136,30 @@ def cmd_aggregate(args) -> int:
     return 0
 
 
+def cmd_detect(args) -> int:
+    """Roda a detecção sem recarregar os fatos, sobre a última execução."""
+    import psycopg
+
+    with psycopg.connect(config.database_url()) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id FROM pipeline_runs WHERE status = 'sucesso' ORDER BY id DESC LIMIT 1")
+            linha = cur.fetchone()
+        if linha is None:
+            print("ERRO: nenhuma execução bem-sucedida em pipeline_runs", file=sys.stderr)
+            return 1
+
+        competencia = args.competencia
+        resultado = anomalies.detectar(conn, linha[0], competencia)
+
+    ano, mes = resultado["competencia"]
+    print(f"  competência avaliada: {ano}-{mes:02d}  (execução {linha[0]})")
+    for situacao, severidade, n in sorted(resultado["contagem"]):
+        rotulo = f"{situacao}/{severidade}" if severidade else situacao
+        print(f"    {rotulo:28} {n:>6,}")
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="etl", description="ETL das interrupções da ANEEL")
     sub = parser.add_subparsers(dest="comando", required=True)
@@ -152,6 +181,11 @@ def main(argv=None) -> int:
 
     p_agg = sub.add_parser("aggregate", help="recalcula conjunto_competencia")
     p_agg.set_defaults(func=cmd_aggregate)
+
+    p_det = sub.add_parser("detect", help="roda a detecção de anomalia")
+    p_det.add_argument("--competencia", type=_competencia, metavar="AAAA-MM",
+                       help="competência a avaliar (padrão: a mais recente)")
+    p_det.set_defaults(func=cmd_detect)
 
     args = parser.parse_args(argv)
     return args.func(args)

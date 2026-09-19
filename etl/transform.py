@@ -43,10 +43,13 @@ COLUNAS_FATO = [
 SRC_LEGACY = """
     SELECT
         CAST(NumCPFCNPJ                    AS BIGINT)    AS distribuidora_cnpj,
-        CAST(SigAgente                     AS VARCHAR)   AS distribuidora_sigla,
-        CAST(NomAgenteRegulado             AS VARCHAR)   AS distribuidora_nome,
+        -- A origem entrega sigla e nome com espaços à direita. Só os campos
+        -- de exibição são aparados: alimentador entra na chave natural, e
+        -- apará-lo mudaria a chave de linhas já gravadas.
+        trim(CAST(SigAgente                AS VARCHAR))  AS distribuidora_sigla,
+        trim(CAST(NomAgenteRegulado        AS VARCHAR))  AS distribuidora_nome,
         CAST(IdeConjuntoUnidadeConsumidora AS BIGINT)    AS conjunto_id,
-        CAST(DscConjuntoUnidadeConsumidora AS VARCHAR)   AS conjunto_nome,
+        trim(CAST(DscConjuntoUnidadeConsumidora AS VARCHAR)) AS conjunto_nome,
         CAST(NumOrdemInterrupcao           AS VARCHAR)   AS cod_interrupcao,
         CAST(DscAlimentadorSubestacao      AS VARCHAR)   AS alimentador_bruto,
         CAST(DatInicioInterrupcao          AS TIMESTAMP) AS dat_inicio,
@@ -68,10 +71,10 @@ SRC_LEGACY = """
 SRC_NEW = """
     SELECT
         CAST(NumCNPJDistribuidora          AS BIGINT)    AS distribuidora_cnpj,
-        CAST(SigAgente                     AS VARCHAR)   AS distribuidora_sigla,
-        CAST(NomAgente                     AS VARCHAR)   AS distribuidora_nome,
+        trim(CAST(SigAgente                AS VARCHAR))  AS distribuidora_sigla,
+        trim(CAST(NomAgente                AS VARCHAR))  AS distribuidora_nome,
         CAST(CodConjUnidadeConsumidora     AS BIGINT)    AS conjunto_id,
-        CAST(DscConjuntoUnidadeConsumidora AS VARCHAR)   AS conjunto_nome,
+        trim(CAST(DscConjuntoUnidadeConsumidora AS VARCHAR)) AS conjunto_nome,
         CAST(CodInterrupcao                AS VARCHAR)   AS cod_interrupcao,
         CAST(CodAlimentador                AS VARCHAR)   AS alimentador_bruto,
         CAST(DatInicioInterrupcao          AS TIMESTAMP) AS dat_inicio,
