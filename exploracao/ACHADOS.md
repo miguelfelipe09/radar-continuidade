@@ -410,6 +410,13 @@ agregação, não à de ingestão.
 Comparações devem ser sempre por conjunto, nunca por total agregado, para que
 diferença de cobertura entre meses não entre no cálculo.
 
+> Confirmado durante o ETL: por competência, a borda de agosto **não existe**.
+> O arquivo de 2026 traz apenas as competências 01 a 07, e os 25 conjuntos que
+> apareciam em agosto vinham da agregação por data de início. A decisão de
+> adotar competência como eixo temporal se sustenta empiricamente — o corte de
+> cobertura mínima segue valendo para dez/2025 e para futuras competências
+> parciais.
+
 ---
 
 ## 9. Duração das interrupções
@@ -432,8 +439,18 @@ sem datas:          20.299 registros
 > `ambos nulos = 20.299`, `só início nulo = 0`, `só fim nulo = 0`. É uma regra
 > de descarte só, não duas.
 
-Layout antigo (2025): 0 negativas, 409.260 acima de 24h, mediana 208 min,
-máximo 70.568 min (~49 dias). Nenhum registro sem data.
+Layout antigo, sobre os dois anos do recorte:
+
+```
+2024:  5.633 acima de 7 dias
+2025:  1.481 acima de 7 dias · 0 negativas · mediana 208 min
+       máximo 70.568 min (~49 dias) · nenhum registro sem data
+```
+
+2024 tem quase 4x mais casos acima de 7 dias que 2025, com volume de linhas
+parecido. A causa não foi investigada — pode ser característica do ano ou de
+alguma distribuidora específica. Como a regra é manter e contar, não afeta o
+indicador.
 
 Mediana de ~3h e 3,6% acima de 24h são valores altos para interrupção de
 distribuição, mas consistentes entre as duas eras e plausíveis em área rural,
@@ -459,6 +476,10 @@ uniforme — não é zero à esquerda perdido, é campo preenchido com código
 interno.
 
 **Todos os 96.256 vêm de uma única distribuidora: CELG (Goiás).**
+
+Os 96.256 não estão espalhados pelo ano: concentram-se em **janeiro (63.035)
+e maio (33.221)**, sem ocorrência nos demais meses. É falha pontual de envio
+em duas competências, não prática sistemática da distribuidora.
 
 Considerando apenas os códigos válidos: **27 UFs e 5.528 municípios** — números
 corretos para o Brasil. A derivação da UF pelos 2 primeiros dígitos funciona.
@@ -588,12 +609,13 @@ Justifica `bigint` para conjunto e CNPJ, `text` para código de interrupção.
 |---|---|---|
 | Duplicata na chave (2026) | dedup determinística | 1.298 |
 | Sem datas (início e fim nulos) | descartar | 20.299 (2026) |
-| Município com ≠ 7 dígitos | `municipio_ibge` nulo | 96.256 (2026, todos CELG) |
+| Município com ≠ 7 dígitos | `municipio_ibge` nulo | 96.256 (2026, CELG, jan e mai) |
 | Alimentador nulo | converter para `''` | 58 (2024), 821 (2025), 0 (2026) |
 | CNPJ com 13 dígitos | normalização idêntica nas duas eras | — |
 | Ativos destoando 3x da mediana | fora do indicador | 13 conjunto-mês (2025) |
+| Reconfiguração de conjunto | nota, não alerta | 4 conjuntos (abr/2025) |
 | Competência abaixo de 50% de cobertura | fora do baseline | 2 meses |
-| Duração acima de 7 dias | manter, só contar | 843 (2026) |
+| Duração acima de 7 dias | manter, só contar | 843 (2026), 1.481 (2025), 5.633 (2024) |
 
 ---
 
@@ -606,6 +628,7 @@ Nada bloqueante. Melhorias possíveis, se sobrar tempo:
       exige mapeamento manual de vocabulário)
 - [ ] Determinar a semântica do desdobramento de linhas no layout antigo
       (3% das ocorrências)
+- [ ] Investigar por que 2024 tem 4x mais interrupções acima de 7 dias que 2025
 - [ ] Avaliar se 2023 vale ser incluído no recorte (mais 9,2M de linhas, um ano
       a mais de baseline sazonal)
 - [ ] Avaliar `char(14)` para o CNPJ, eliminando a dependência de formatação na
