@@ -148,8 +148,13 @@ def _gravar_ativos(cur: psycopg.Cursor, res: TransformResult) -> None:
 def _gravar_reconfiguracoes(cur: psycopg.Cursor) -> int:
     """Registra a competência em que o conjunto mudou de patamar.
 
-    O conjunto-mês destoante é sintoma de redesenho de conjunto (ACHADOS §4);
-    a vigência é a primeira competência normal depois do último mês destoante.
+    Mês destoante sozinho não é reconfiguração: o conjunto 14503 cai de ~4.700
+    para 752 em novembro/2025 e volta a 5.077 em dezembro — erro de envio, não
+    redesenho. Só vira reconfiguração quando o patamar muda e *fica*: medianas
+    antes e depois diferindo mais de 2x, com pelo menos 2 meses de cada lado.
+
+    O limiar é 2x, não 3x, porque o conjunto 16489 muda de patamar a 3,19x e
+    passaria raspando — margem estreita demais para uma regra de corte.
     """
     cur.execute("""
         WITH ultimo_destoante AS (
@@ -158,7 +163,8 @@ def _gravar_reconfiguracoes(cur: psycopg.Cursor) -> int:
             WHERE destoante
             GROUP BY 1, 2
         ),
-        vigencia AS (
+        -- Candidata: primeira competência normal depois do último mês destoante.
+        candidata AS (
             SELECT d.conjunto_id, d.competencia_ano, min(a.competencia_mes) AS competencia_mes
             FROM ultimo_destoante d
             JOIN conjunto_consumidores_ativos a
@@ -167,12 +173,33 @@ def _gravar_reconfiguracoes(cur: psycopg.Cursor) -> int:
              AND a.competencia_mes > d.mes
              AND NOT a.destoante
             GROUP BY 1, 2
+        ),
+        -- Compara os dois regimes em torno da candidata. Os meses destoantes
+        -- entram do lado "antes": eles são o patamar antigo.
+        lados AS (
+            SELECT c.conjunto_id, c.competencia_ano, c.competencia_mes,
+                count(*) FILTER (WHERE a.competencia_mes <  c.competencia_mes) AS meses_antes,
+                count(*) FILTER (WHERE a.competencia_mes >= c.competencia_mes) AS meses_depois,
+                percentile_cont(0.5) WITHIN GROUP (ORDER BY a.consumidores_ativos)
+                    FILTER (WHERE a.competencia_mes <  c.competencia_mes) AS mediana_antes,
+                percentile_cont(0.5) WITHIN GROUP (ORDER BY a.consumidores_ativos)
+                    FILTER (WHERE a.competencia_mes >= c.competencia_mes) AS mediana_depois
+            FROM candidata c
+            JOIN conjunto_consumidores_ativos a
+              ON a.conjunto_id     = c.conjunto_id
+             AND a.competencia_ano = c.competencia_ano
+            GROUP BY 1, 2, 3
         )
         INSERT INTO conjunto_reconfiguracoes
             (conjunto_id, competencia_ano, competencia_mes, observacao)
         SELECT conjunto_id, competencia_ano, competencia_mes,
-               'Derivada pelo ETL: consumidores ativos mudam de patamar nesta competência'
-        FROM vigencia
+               format('Derivada pelo ETL: consumidores ativos passam de %s para %s nesta competência',
+                      round(mediana_antes), round(mediana_depois))
+        FROM lados
+        WHERE meses_antes >= 2 AND meses_depois >= 2
+          AND mediana_antes > 0 AND mediana_depois > 0
+          AND greatest(mediana_antes, mediana_depois)
+              > 2 * least(mediana_antes, mediana_depois)
         ON CONFLICT (conjunto_id, competencia_ano, competencia_mes) DO NOTHING
     """)
     return cur.rowcount

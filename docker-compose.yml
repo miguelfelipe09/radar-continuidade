@@ -1,8 +1,10 @@
 services:
   db:
     image: postgres:16-alpine
+    # 5433 é disputada com o PostgreSQL nativo da máquina, que atende primeiro
+    # em localhost e recusa as credenciais do container.
     ports:
-      - "5433:5432"
+      - "5434:5432"
     environment:
       POSTGRES_USER: app
       POSTGRES_PASSWORD: app

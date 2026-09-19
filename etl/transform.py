@@ -116,6 +116,16 @@ class TransformResult:
     municipios: list = field(default_factory=list)
 
 
+def layout_do_arquivo(arquivo: Path) -> str:
+    """Detecta o layout sem abrir a transformação, para a execução já nascer
+    rotulada com a era certa mesmo se a transformação falhar."""
+    con = duckdb.connect()
+    try:
+        return detectar_layout(con, arquivo)
+    finally:
+        con.close()
+
+
 def detectar_layout(con: duckdb.DuckDBPyConnection, arquivo: Path) -> str:
     """Decide o adaptador pelas colunas do arquivo, não pelo ano.
 
@@ -178,10 +188,12 @@ def transformar(arquivo: Path, ano: int, corte: int | None, workdir: Path) -> Tr
             con.execute("CREATE VIEW no_corte AS SELECT * FROM com_datas")
             c.fora_do_corte = 0
         else:
+            # O cast é necessário: competencia_ano é SMALLINT e 2026 * 100
+            # estoura o INT16.
             con.execute(f"""
                 CREATE VIEW no_corte AS
                 SELECT * FROM com_datas
-                WHERE competencia_ano * 100 + competencia_mes <= {corte}
+                WHERE CAST(competencia_ano AS INTEGER) * 100 + competencia_mes <= {corte}
             """)
             c.fora_do_corte = con.execute(
                 "SELECT count(*) FROM com_datas"

@@ -16,7 +16,7 @@ from pathlib import Path
 
 from . import config, load, runs
 from .download import DownloadError, baixar_ano
-from .transform import transformar
+from .transform import layout_do_arquivo, transformar
 
 
 def _competencia(texto: str) -> tuple[int, int]:
@@ -82,11 +82,12 @@ def cmd_ingest(args) -> int:
         # Conexão separada, em autocommit, para a linha da execução sobreviver
         # a uma falha na transação da carga.
         with psycopg.connect(url, autocommit=True) as conn_runs:
-            res = None
-            run_id = None
+            # A execução é aberta antes da transformação: uma falha ali também
+            # precisa aparecer em pipeline_runs, com a era correta.
+            layout = layout_do_arquivo(arquivo)
+            run_id = runs.abrir_run(conn_runs, arquivo.name, ano, layout, corte)
             try:
                 res = transformar(arquivo, ano, corte_num, workdir)
-                run_id = runs.abrir_run(conn_runs, arquivo.name, ano, res.layout, corte)
                 _imprimir_contadores(res)
 
                 with psycopg.connect(url) as conn:
@@ -102,9 +103,6 @@ def cmd_ingest(args) -> int:
                 print(f"  reconfigurações registradas: {numeros['reconfiguracoes']:,}")
                 print(f"  tempo:                       {time.monotonic() - inicio:.1f}s")
             except Exception as erro:
-                if run_id is None:
-                    layout = res.layout if res else "legacy"
-                    run_id = runs.abrir_run(conn_runs, arquivo.name, ano, layout, corte)
                 runs.fechar_run_falha(conn_runs, run_id, f"{type(erro).__name__}: {erro}")
                 traceback.print_exc()
                 return 1

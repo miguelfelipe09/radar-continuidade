@@ -3,12 +3,13 @@
 Registro das consultas de exploração feitas sobre os arquivos Parquet da ANEEL
 e das decisões de modelagem que cada resultado gerou.
 
-**Data:** 18/09/2026
+**Data:** 18–19/09/2026
 **Ferramenta:** DuckDB. Consultas em [`01-layouts.sql`](01-layouts.sql),
 [`02-grao.sql`](02-grao.sql), [`03-chave-natural.sql`](03-chave-natural.sql),
 [`04-denominador.sql`](04-denominador.sql), [`05-series.sql`](05-series.sql),
 [`06-expurgo-causa.sql`](06-expurgo-causa.sql) e
-[`07-pendentes.sql`](07-pendentes.sql).
+[`07-pendentes.sql`](07-pendentes.sql). A §13 reúne verificações feitas durante
+a escrita das migrations.
 
 **Regra:** todo número aqui veio de uma consulta que rodou. Nada estimado.
 
@@ -164,7 +165,7 @@ acima de 3x: 5 conjuntos em 3.101
 
 Mediana de 1,02x é crescimento normal da base de consumidores.
 
-### Os 5 casos extremos são reconfiguração de conjuntos
+### Os 5 casos extremos: 4 reconfigurações e 1 mês isolado
 
 | Conjunto | mín | máx | razão |
 |---|---|---|---|
@@ -174,13 +175,28 @@ Mediana de 1,02x é crescimento normal da base de consumidores.
 | 17238 | 2.362 | 9.809 | 4,2x |
 | 16489 | 4.510 | 14.563 | 3,2x |
 
-Aplicando o corte por conjunto-mês, **13 conjunto-mês ficam fora, todos em
-jan/fev/mar de 2025**. Em 4 dos 5 conjuntos o valor salta em abril e não volta;
-o 15737 faz o inverso, perdendo ~25 mil consumidores enquanto o 17402 ganha
-~38 mil.
+Aplicando o corte por conjunto-mês, **13 conjunto-mês ficam fora: 12 em
+jan/fev/mar de 2025 e 1 em novembro**.
 
-Não é dado sujo: é **redesenho de conjuntos com vigência em abril de 2025**,
-com consumidores migrando entre eles.
+> Correção (19/09, durante o ETL): a primeira redação dizia "todos em
+> jan/fev/mar". O décimo terceiro caso é o conjunto 14503, em **novembro**.
+
+Em 4 dos 5 conjuntos (15737, 16489, 17238, 17402) o valor salta em abril e não
+volta; o 15737 faz o inverso, perdendo ~25 mil consumidores enquanto o 17402
+ganha ~38 mil. Nesses, não é dado sujo: é **redesenho de conjuntos com vigência
+em abril de 2025**, com consumidores migrando entre eles.
+
+O 14503 é outro fenômeno. Fica em ~4.700 o ano todo, cai para 752 em novembro
+e volta para 5.077 em dezembro:
+
+```
+jan 4709 · fev 4701 · mar 4687 · abr 4692 · mai 4714 · jun 4722
+jul 4739 · ago 4736 · set 4742 · out 4749 · nov  752 · dez 5077
+```
+
+Mês isolado que volta ao normal é erro de envio da distribuidora, não
+redesenho. O mês sai do indicador como qualquer destoante, mas **não gera
+marcação de reconfiguração**.
 
 **Decisão:** usar a **moda** de consumidores ativos dentro de cada
 conjunto-mês. Descartar do indicador normalizado o conjunto-mês cujo valor de
@@ -191,6 +207,13 @@ conjunto com 11 meses bons e 1 quebrado deve perder só o mês ruim.
 Marcar o conjunto como tendo sofrido reconfiguração no período, para que a fila
 de investigação apresente uma nota em vez de um alerta — mudança administrativa
 não é anomalia operacional.
+
+**Regra da marcação (definida no ETL):** só há reconfiguração quando o patamar
+muda e *fica*. A partir do primeiro mês normal após o último destoante,
+compara-se a mediana de antes com a de depois: precisa diferir mais de **2x**,
+com pelo menos **2 meses de cada lado**. O limiar é 2x e não 3x porque o 16489
+muda de patamar a 3,19x — margem estreita demais para uma regra de corte. Em
+2025 a regra produz 4 reconfigurações, todas em abril, e deixa o 14503 de fora.
 
 ---
 
@@ -264,6 +287,11 @@ chave: `row_number()` particionado por
 **Verificado: a chave fecha — 9.715.372 linhas, 9.715.372 chaves distintas.**
 Mantém idempotência sem chave sintética aleatória.
 
+> ⚠️ O alimentador entra na chave e **tem nulos no layout antigo** (ver §13).
+> Como o Postgres trata `NULL` como distinto em índice único, a garantia de
+> unicidade evaporaria nessas linhas. A coluna é `NOT NULL DEFAULT ''` e o ETL
+> converte nulo em string vazia.
+
 ---
 
 ## 6. Expurgos — só existem no layout novo
@@ -318,6 +346,10 @@ com as categorias de expurgo de 2026.
 **Decisão:** preservar no banco (`motivo_expurgo` texto, `expurgado` booleano
 derivado), não descartar na ingestão.
 
+> A coluna `expurgado` **preserva o nulo** no layout antigo. Nulo ali significa
+> *desconhecido*, não *não expurgado* — tratar como `false` enviesaria qualquer
+> comparação entre eras.
+
 **Para a série histórica, calcular o indicador SEM filtro de expurgo em todas
 as competências**, inclusive 2026. Motivo: 2024–2025 não têm expurgo
 identificável, e filtrar só o período recente faria 2026 parecer
@@ -371,6 +403,10 @@ baseline e da fila de investigação a competência cuja cobertura fique abaixo 
 **50% da cobertura máxima** — corte simples que pega os dois casos sem risco de
 excluir mês legítimo (o mais baixo entre os completos é fev/2026, com 91,5%).
 
+A regra não é persistida no schema: ela compara contra "o mês de maior
+cobertura", que muda conforme novos dados entram, então pertence à camada de
+agregação, não à de ingestão.
+
 Comparações devem ser sempre por conjunto, nunca por total agregado, para que
 diferença de cobertura entre meses não entre no cálculo.
 
@@ -378,7 +414,7 @@ diferença de cobertura entre meses não entre no cálculo.
 
 ## 9. Duração das interrupções
 
-Layout novo (2026), sobre 6.058.032 registros com data de fim:
+Layout novo (2026), sobre 6.058.032 registros com datas válidas:
 
 ```
 duração negativa:        0
@@ -389,20 +425,24 @@ mediana:               197 min
 p95:                 1.294 min
 máximo:            216.106 min  (~150 dias)
 
-sem DatFimInterrupcao: 20.299 registros
+sem datas:          20.299 registros
 ```
 
+> Os 20.299 registros sem data **não têm nem início nem fim** — verificado:
+> `ambos nulos = 20.299`, `só início nulo = 0`, `só fim nulo = 0`. É uma regra
+> de descarte só, não duas.
+
 Layout antigo (2025): 0 negativas, 409.260 acima de 24h, mediana 208 min,
-máximo 70.568 min (~49 dias).
+máximo 70.568 min (~49 dias). Nenhum registro sem data.
 
 Mediana de ~3h e 3,6% acima de 24h são valores altos para interrupção de
 distribuição, mas consistentes entre as duas eras e plausíveis em área rural,
 onde o religamento pode levar dias.
 
-**Decisão:** não descartar por duração. Gravar tudo e marcar
-`duracao_suspeita` acima de 7 dias. Descartar apenas os registros **sem data de
-fim** (20.299 em 2026), já que sem fim não há consumidor-hora calculável.
-Contabilizar em `pipeline_runs`.
+**Decisão:** não descartar por duração. Gravar tudo e contabilizar as acima de
+7 dias em `pipeline_runs` (a flag não foi para a tabela de fatos: 843 casos em
+6M nunca serão critério de filtro). Descartar apenas os registros **sem datas**,
+já que sem fim não há consumidor-hora calculável.
 
 ---
 
@@ -462,6 +502,73 @@ recorte sem ressalva.
 
 ---
 
+## 13. Verificações durante a modelagem (19/09)
+
+Quatro checagens feitas antes de fechar o schema, todas com impacto direto nas
+migrations.
+
+### Alimentador tem nulos no layout antigo
+
+```
+2024:  58 nulos em 9.211.251
+2025: 821 nulos em 9.715.372
+2026:   0 nulos em 6.078.331
+```
+
+String vazia não ocorre em nenhuma das eras. Como o alimentador entra na chave
+natural e o Postgres trata `NULL` como distinto em índice único, essas linhas
+passariam sem validação de unicidade.
+
+**Decisão:** coluna `NOT NULL DEFAULT ''`, com o ETL convertendo nulo em string
+vazia. Confirmado em teste: a chave rejeita duplicata com alimentador vazio.
+
+Nenhuma outra coluna da chave tem nulos (CNPJ, código de interrupção, conjunto
+e data de início: 0 nulos nas duas eras — exceto as 20.299 linhas sem datas da
+§9, que são descartadas).
+
+### CNPJ perde o zero à esquerda na origem
+
+```
+2025:  13 a 14 dígitos,  52 distintos,  menor 1377555000110
+2026:  13 a 14 dígitos,  51 distintos,  menor 1377555000110
+```
+
+O campo é `INT64` no Parquet nas duas eras, então `01377555000110` chega como
+`1377555000110`. O valor é idêntico entre as eras, o que preserva a junção,
+mas a normalização precisa ser a mesma dos dois lados — senão a mesma
+distribuidora entra duas vezes.
+
+**Decisão:** armazenar como `bigint`; a formatação com zero à esquerda fica na
+camada de apresentação.
+
+### Conjunto não colide entre distribuidoras
+
+```
+2025:                 3.101 códigos distintos = 3.101 pares (cnpj, conjunto)
+2024+2025+2026 (união): 3.262 códigos distintos = 3.262 pares
+```
+
+Zero colisão no recorte inteiro. O código de conjunto é globalmente único,
+diferente do código de alimentador.
+
+**Decisão:** chave primária de coluna única em `conjuntos`.
+
+> Observação: a unicidade é **observada em três anos de dados**, não garantida
+> por documentação da ANEEL. Se uma carga futura trouxer colisão, a chave
+> precisa virar composta — risco aceito conscientemente, com correção a custo
+> de uma migration.
+
+### Tipos físicos no Parquet
+
+| Campo | Tipo |
+|---|---|
+| conjunto, CNPJ, município, competência, afetados, ativos | `INT64` |
+| código de interrupção, alimentador, evento, ocorrência | `BYTE_ARRAY` |
+
+Justifica `bigint` para conjunto e CNPJ, `text` para código de interrupção.
+
+---
+
 ## Recorte final do projeto
 
 - **Período:** 2024, 2025 e 2026 (~25M de linhas)
@@ -480,11 +587,13 @@ recorte sem ressalva.
 | Situação | Tratamento | Volume observado |
 |---|---|---|
 | Duplicata na chave (2026) | dedup determinística | 1.298 |
-| Sem data de fim | descartar | 20.299 (2026) |
-| Município malformado | `municipio_ibge` nulo | 96.256 (2026) |
+| Sem datas (início e fim nulos) | descartar | 20.299 (2026) |
+| Município com ≠ 7 dígitos | `municipio_ibge` nulo | 96.256 (2026, todos CELG) |
+| Alimentador nulo | converter para `''` | 58 (2024), 821 (2025), 0 (2026) |
+| CNPJ com 13 dígitos | normalização idêntica nas duas eras | — |
 | Ativos destoando 3x da mediana | fora do indicador | 13 conjunto-mês (2025) |
 | Competência abaixo de 50% de cobertura | fora do baseline | 2 meses |
-| Duração acima de 7 dias | marcar suspeita, manter | 843 (2026) |
+| Duração acima de 7 dias | manter, só contar | 843 (2026) |
 
 ---
 
@@ -499,3 +608,5 @@ Nada bloqueante. Melhorias possíveis, se sobrar tempo:
       (3% das ocorrências)
 - [ ] Avaliar se 2023 vale ser incluído no recorte (mais 9,2M de linhas, um ano
       a mais de baseline sazonal)
+- [ ] Avaliar `char(14)` para o CNPJ, eliminando a dependência de formatação na
+      camada de apresentação
