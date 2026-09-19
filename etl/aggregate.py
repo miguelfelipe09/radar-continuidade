@@ -14,7 +14,8 @@ AGREGAR = """
 INSERT INTO conjunto_competencia (
     conjunto_id, distribuidora_cnpj, competencia_ano, competencia_mes,
     eventos, consumidores_afetados, consumidor_horas,
-    consumidores_ativos, destoante, dec_aprox, fec_aprox, cobertura_ok, atualizado_em
+    consumidores_ativos, destoante, dec_aprox, fec_aprox, cobertura_ok,
+    cobertura_distribuidora_ok, atualizado_em
 )
 WITH agregado AS (
     -- Sem filtro de expurgo, de propósito (ACHADOS §6): 2024-2025 não têm
@@ -40,6 +41,27 @@ cobertura_flag AS (
     SELECT competencia_ano, competencia_mes,
            conjuntos >= 0.5 * max(conjuntos) OVER () AS cobertura_ok
     FROM cobertura
+),
+-- Mesma regra no grão da distribuidora. O típico é a mediana dos conjuntos
+-- que ela reporta por mês, e não o máximo: um mês com conjuntos a mais (após
+-- redesenho, por exemplo) não deve rebaixar os demais.
+cobertura_dist AS (
+    SELECT c.distribuidora_cnpj, a.competencia_ano, a.competencia_mes, count(*) AS conjuntos
+    FROM agregado a
+    JOIN conjuntos c USING (conjunto_id)
+    GROUP BY 1, 2, 3
+),
+tipico_dist AS (
+    SELECT distribuidora_cnpj,
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY conjuntos) AS tipico
+    FROM cobertura_dist
+    GROUP BY 1
+),
+cobertura_dist_flag AS (
+    SELECT cd.distribuidora_cnpj, cd.competencia_ano, cd.competencia_mes,
+           cd.conjuntos >= 0.5 * t.tipico AS cobertura_distribuidora_ok
+    FROM cobertura_dist cd
+    JOIN tipico_dist t USING (distribuidora_cnpj)
 )
 SELECT
     a.conjunto_id,
@@ -56,12 +78,19 @@ SELECT
     CASE WHEN ca.consumidores_ativos > 0 AND NOT coalesce(ca.destoante, false)
          THEN a.consumidores_afetados::double precision / ca.consumidores_ativos END AS fec_aprox,
     cf.cobertura_ok,
+    cdf.cobertura_distribuidora_ok,
     now()
 FROM agregado a
 JOIN conjuntos c USING (conjunto_id)
 JOIN cobertura_flag cf USING (competencia_ano, competencia_mes)
+JOIN cobertura_dist_flag cdf
+  ON cdf.distribuidora_cnpj = c.distribuidora_cnpj
+ AND cdf.competencia_ano    = a.competencia_ano
+ AND cdf.competencia_mes    = a.competencia_mes
 LEFT JOIN conjunto_consumidores_ativos ca
-       USING (conjunto_id, competencia_ano, competencia_mes)
+       ON ca.conjunto_id     = a.conjunto_id
+      AND ca.competencia_ano = a.competencia_ano
+      AND ca.competencia_mes = a.competencia_mes
 ON CONFLICT (conjunto_id, competencia_ano, competencia_mes) DO UPDATE SET
     distribuidora_cnpj    = EXCLUDED.distribuidora_cnpj,
     eventos               = EXCLUDED.eventos,
@@ -72,6 +101,7 @@ ON CONFLICT (conjunto_id, competencia_ano, competencia_mes) DO UPDATE SET
     dec_aprox             = EXCLUDED.dec_aprox,
     fec_aprox             = EXCLUDED.fec_aprox,
     cobertura_ok          = EXCLUDED.cobertura_ok,
+    cobertura_distribuidora_ok = EXCLUDED.cobertura_distribuidora_ok,
     atualizado_em         = EXCLUDED.atualizado_em
 """
 

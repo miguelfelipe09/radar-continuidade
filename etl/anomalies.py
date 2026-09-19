@@ -43,6 +43,7 @@ anterior AS (
     SELECT cc.*
     FROM conjunto_competencia cc, alvo a
     WHERE cc.cobertura_ok
+      AND cc.cobertura_distribuidora_ok
       AND cc.dec_aprox IS NOT NULL
       AND (cc.competencia_ano * 100 + cc.competencia_mes) < (a.ano * 100 + a.mes)
 ),
@@ -100,7 +101,8 @@ avaliacao AS (
         b.q3,
         b.q3 - b.q1 AS iqr,
         CASE WHEN o.conjunto_id = 0            THEN 'conjunto_invalido'
-             WHEN NOT o.cobertura_ok           THEN 'cobertura'
+             WHEN NOT o.cobertura_ok
+               OR NOT o.cobertura_distribuidora_ok THEN 'cobertura'
              WHEN o.destoante                  THEN 'destoante'
              WHEN o.dec_aprox IS NULL
                OR o.consumidores_ativos < %(minimo_ativos)s THEN 'denominador'
