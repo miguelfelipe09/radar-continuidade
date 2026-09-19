@@ -6,7 +6,7 @@ identificador do recurso pode mudar.
 """
 
 import json
-import shutil
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -28,8 +28,8 @@ def _abrir(url: str):
     return urllib.request.urlopen(req, timeout=TIMEOUT)
 
 
-def resource_url(ano: int) -> str:
-    """Resolve a URL do Parquet do ano pela API do CKAN."""
+def catalogo() -> dict:
+    """Baixa o package_show do dataset. Ver etl/fixtures/package_show.json."""
     api = f"{CKAN_BASE}/api/3/action/package_show?id={DATASET}"
     try:
         with _abrir(api) as resp:
@@ -41,13 +41,22 @@ def resource_url(ano: int) -> str:
 
     if not pacote.get("success"):
         raise DownloadError(f"a API do CKAN respondeu sem sucesso para {DATASET}")
+    return pacote
 
+
+def encontrar_recurso(pacote: dict, ano: int) -> dict:
+    """Acha o recurso Parquet do ano dentro do catálogo.
+
+    Cada ano aparece duas vezes: um ZIP com o nome sem extensão e um Parquet
+    cujo nome traz o `.parquet`. É o Parquet que queremos — o DuckDB o lê
+    direto, sem descompactar.
+    """
     alvo = f"interrupcoes-energia-eletrica-{ano}"
     for recurso in pacote["result"]["resources"]:
         nome = (recurso.get("name") or "").strip().lower()
         formato = (recurso.get("format") or "").strip().lower()
-        if nome == alvo and formato == "parquet":
-            return recurso["url"]
+        if formato == "parquet" and nome.removesuffix(".parquet") == alvo:
+            return recurso
 
     disponiveis = sorted(
         (r.get("name") or "?") for r in pacote["result"]["resources"]
@@ -58,27 +67,59 @@ def resource_url(ano: int) -> str:
     )
 
 
-def baixar_ano(ano: int, forcar: bool = False) -> Path:
-    """Baixa o Parquet do ano para data/. Devolve o caminho do arquivo."""
+def resource_url(ano: int) -> str:
+    return encontrar_recurso(catalogo(), ano)["url"]
+
+
+def baixar_ano(ano: int, forcar: bool = False, limite_bytes: int | None = None) -> Path:
+    """Baixa o Parquet do ano para data/. Devolve o caminho do arquivo.
+
+    `limite_bytes` interrompe depois de N bytes e não promove o arquivo: serve
+    para validar a URL sem puxar o arquivo inteiro.
+    """
     destino = parquet_path(ano)
-    if destino.exists() and not forcar:
+    if destino.exists() and not forcar and limite_bytes is None:
         print(f"  {destino.name} já existe ({destino.stat().st_size:,} bytes) — use --forcar para rebaixar")
         return destino
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    url = resource_url(ano)
+    recurso = encontrar_recurso(catalogo(), ano)
+    url = recurso["url"]
+    esperado = recurso.get("size")
     print(f"  {ano}: {url}")
+    print(f"  publicado em {recurso.get('last_modified')}, {esperado:,} bytes no catálogo")
 
     # Baixa para .part e só renomeia no fim, para uma interrupção não deixar
     # arquivo truncado passando por íntegro.
     parcial = destino.with_suffix(".parquet.part")
+    baixados = 0
+    inicio = time.monotonic()
     try:
         with _abrir(url) as resp, open(parcial, "wb") as saida:
-            shutil.copyfileobj(resp, saida, length=1024 * 1024)
+            while bloco := resp.read(1024 * 1024):
+                saida.write(bloco)
+                baixados += len(bloco)
+                print(f"\r  baixados {baixados:,} bytes", end="", flush=True)
+                if limite_bytes is not None and baixados >= limite_bytes:
+                    break
+        print()
     except (urllib.error.URLError, TimeoutError, OSError) as erro:
         parcial.unlink(missing_ok=True)
         raise DownloadError(f"falha ao baixar {url}: {erro}") from erro
 
+    segundos = time.monotonic() - inicio
+    if limite_bytes is not None:
+        parcial.unlink(missing_ok=True)
+        print(f"  parcial: {baixados:,} bytes em {segundos:.1f}s — URL resolvida e servindo dados")
+        return destino
+
+    # O catálogo informa o tamanho: conferir evita promover download truncado.
+    if esperado and baixados != esperado:
+        parcial.unlink(missing_ok=True)
+        raise DownloadError(
+            f"download incompleto: {baixados:,} bytes recebidos, {esperado:,} esperados"
+        )
+
     parcial.replace(destino)
-    print(f"  {destino.name}: {destino.stat().st_size:,} bytes")
+    print(f"  {destino.name}: {destino.stat().st_size:,} bytes em {segundos:.1f}s")
     return destino

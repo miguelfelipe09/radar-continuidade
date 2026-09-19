@@ -48,7 +48,7 @@ def _imprimir_contadores(res) -> None:
 def cmd_download(args) -> int:
     for ano in args.ano:
         try:
-            baixar_ano(ano, forcar=args.forcar)
+            baixar_ano(ano, forcar=args.forcar, limite_bytes=args.limite_bytes)
         except DownloadError as erro:
             print(f"ERRO: {erro}", file=sys.stderr)
             return 1
@@ -119,6 +119,8 @@ def main(argv=None) -> int:
     p_down = sub.add_parser("download", help="baixa o Parquet anual da ANEEL")
     p_down.add_argument("--ano", type=int, action="append", required=True)
     p_down.add_argument("--forcar", action="store_true", help="rebaixa mesmo se já existir")
+    p_down.add_argument("--limite-bytes", type=int, metavar="N",
+                        help="para depois de N bytes e descarta: valida a URL sem baixar tudo")
     p_down.set_defaults(func=cmd_download)
 
     p_ing = sub.add_parser("ingest", help="transforma e carrega no Postgres")
