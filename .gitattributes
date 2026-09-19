@@ -1,0 +1,4 @@
+* text=auto
+
+# O runner roda dentro do container e via bash: CRLF quebraria o shebang.
+*.sh text eol=lf
