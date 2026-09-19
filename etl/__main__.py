@@ -14,7 +14,7 @@ import time
 import traceback
 from pathlib import Path
 
-from . import config, load, runs
+from . import aggregate, config, load, runs
 from .download import DownloadError, baixar_ano
 from .transform import layout_do_arquivo, transformar
 
@@ -92,6 +92,10 @@ def cmd_ingest(args) -> int:
 
                 with psycopg.connect(url) as conn:
                     numeros = load.carregar(conn, res)
+                    # A agregação é recalculada inteira: cobertura_ok compara
+                    # contra o mês de maior cobertura, que esta carga pode ter
+                    # acabado de mudar.
+                    resumo = aggregate.agregar(conn)
 
                 runs.fechar_run_sucesso(
                     conn_runs, run_id, res.counters,
@@ -101,12 +105,29 @@ def cmd_ingest(args) -> int:
                 print(f"  atualizadas:                 {numeros['atualizadas']:,}")
                 print(f"  inalteradas:                 {numeros['inalteradas']:,}")
                 print(f"  reconfigurações registradas: {numeros['reconfiguracoes']:,}")
+                print(f"  conjunto-competência:        {resumo['linhas']:,} "
+                      f"({resumo['sem_indicador']:,} sem indicador)")
                 print(f"  tempo:                       {time.monotonic() - inicio:.1f}s")
             except Exception as erro:
                 runs.fechar_run_falha(conn_runs, run_id, f"{type(erro).__name__}: {erro}")
                 traceback.print_exc()
                 return 1
 
+    return 0
+
+
+def cmd_aggregate(args) -> int:
+    """Recalcula a agregação sem recarregar os fatos."""
+    import psycopg
+
+    inicio = time.monotonic()
+    with psycopg.connect(config.database_url()) as conn:
+        resumo = aggregate.agregar(conn)
+    print(f"  conjunto-competência:  {resumo['linhas']:,}")
+    print(f"  sem cobertura:         {resumo['sem_cobertura']:,}")
+    print(f"  destoantes:            {resumo['destoantes']:,}")
+    print(f"  sem indicador:         {resumo['sem_indicador']:,}")
+    print(f"  tempo:                 {time.monotonic() - inicio:.1f}s")
     return 0
 
 
@@ -128,6 +149,9 @@ def main(argv=None) -> int:
     p_ing.add_argument("--dry-run", action="store_true", help="transforma e conta, sem gravar")
     p_ing.add_argument("--workdir", help="diretório dos arquivos intermediários")
     p_ing.set_defaults(func=cmd_ingest)
+
+    p_agg = sub.add_parser("aggregate", help="recalcula conjunto_competencia")
+    p_agg.set_defaults(func=cmd_aggregate)
 
     args = parser.parse_args(argv)
     return args.func(args)

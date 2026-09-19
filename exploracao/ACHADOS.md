@@ -413,9 +413,17 @@ diferença de cobertura entre meses não entre no cálculo.
 > Confirmado durante o ETL: por competência, a borda de agosto **não existe**.
 > O arquivo de 2026 traz apenas as competências 01 a 07, e os 25 conjuntos que
 > apareciam em agosto vinham da agregação por data de início. A decisão de
-> adotar competência como eixo temporal se sustenta empiricamente — o corte de
-> cobertura mínima segue valendo para dez/2025 e para futuras competências
-> parciais.
+> adotar competência como eixo temporal se sustenta empiricamente.
+
+> **A regra dos 50% não descarta nada no recorte atual** (verificado sobre
+> `conjunto_competencia`, 2024–2026): a competência de menor cobertura é
+> fev/2026, com 91,5% do máximo — muito acima do corte. Tanto a borda de agosto
+> quanto a de dez/2025 eram artefato da agregação por data de início e somem
+> quando o eixo é a competência.
+>
+> A regra fica implementada como **guarda para competências futuras publicadas
+> parcialmente**, que é o caso que vai acontecer a cada republicação mensal da
+> ANEEL, e não como filtro atuante hoje.
 
 ---
 
