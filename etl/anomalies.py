@@ -24,19 +24,50 @@ MINIMO_PONTOS = 12
 # guarda contra denominador quebrado: 14 conjunto-mês na base têm de 1 a 39
 # consumidores ativos.
 MINIMO_ATIVOS = 100
-# Acima disto o baseline é considerado esburacado (de ~30 competências).
-MAXIMO_BURACOS = 6
+# Queda: caiu a menos de um quarto da mediana do próprio baseline.
+RAZAO_QUEDA = 0.25
 
 DETECTAR = """
 INSERT INTO anomalias (
     pipeline_run_id, conjunto_id, competencia_ano, competencia_mes, distribuidora_cnpj,
-    situacao, dec_aprox, dec_normalizado, consumidores_afetados, consumidores_ativos,
-    eventos, baseline_pontos, baseline_meses_faltando, baseline_mediana,
-    baseline_q1, baseline_q3, baseline_iqr, limite_alerta, desvio_iqr,
-    severidade, reconfiguracao, baseline_esburacado
+    situacao, motivo_ausencia, dec_aprox, dec_normalizado, consumidores_afetados,
+    consumidores_ativos, eventos, baseline_pontos, buracos_envio, buracos_conjunto,
+    baseline_mediana, baseline_q1, baseline_q3, baseline_iqr, limite_alerta,
+    desvio_iqr, severidade, reconfiguracao, baseline_esburacado, saturacao_frota
 )
 WITH alvo AS (
     SELECT %(ano)s::smallint AS ano, %(mes)s::smallint AS mes
+),
+-- Índice absoluto de competência (ano*12 + mes-1), para aritmética de janela.
+alvo_idx AS (SELECT ano * 12 + mes - 1 AS idx FROM alvo),
+comps AS (
+    SELECT DISTINCT competencia_ano * 12 + competencia_mes - 1 AS idx
+    FROM conjunto_competencia
+),
+-- Grade distribuidora x competência. É ela que enxerga a ausência total: um
+-- mês em que a distribuidora não envia nada não gera linha na agregação, e
+-- por isso escapa da regra de cobertura.
+dist_mes AS (
+    SELECT c.distribuidora_cnpj,
+           cc.competencia_ano * 12 + cc.competencia_mes - 1 AS idx,
+           count(*) AS n
+    FROM conjunto_competencia cc
+    JOIN conjuntos c USING (conjunto_id)
+    GROUP BY 1, 2
+),
+dist_perfil AS (
+    SELECT distribuidora_cnpj,
+           percentile_cont(0.5) WITHIN GROUP (ORDER BY n) AS tipico,
+           min(idx) AS ini
+    FROM dist_mes GROUP BY 1
+),
+falha_dist AS (
+    SELECT p.distribuidora_cnpj, c.idx
+    FROM dist_perfil p
+    JOIN comps c ON c.idx >= p.ini
+    LEFT JOIN dist_mes dm
+           ON dm.distribuidora_cnpj = p.distribuidora_cnpj AND dm.idx = c.idx
+    WHERE coalesce(dm.n, 0) < 0.5 * p.tipico
 ),
 -- Tudo que é anterior à competência avaliada. Base do índice e do baseline.
 anterior AS (
@@ -57,8 +88,33 @@ indice AS (
     FROM anterior
     GROUP BY 1
 ),
-competencias_possiveis AS (
-    SELECT count(DISTINCT (competencia_ano, competencia_mes)) AS total FROM anterior
+-- Presença do conjunto nas competências anteriores, e a janela dele: a
+-- contagem de buracos começa na primeira aparição, senão mês anterior à
+-- existência do conjunto viraria falta.
+presenca AS (
+    SELECT conjunto_id, competencia_ano * 12 + competencia_mes - 1 AS idx
+    FROM conjunto_competencia
+    WHERE (competencia_ano * 12 + competencia_mes - 1) < (SELECT idx FROM alvo_idx)
+),
+janela AS (SELECT conjunto_id, min(idx) AS ini FROM presenca GROUP BY 1),
+buracos AS (
+    SELECT j.conjunto_id,
+           count(*) FILTER (WHERE fd.idx IS NOT NULL)::smallint AS buracos_envio,
+           count(*) FILTER (WHERE fd.idx IS NULL AND p.idx IS NULL)::smallint AS buracos_conjunto
+    FROM janela j
+    JOIN conjuntos cj ON cj.conjunto_id = j.conjunto_id
+    JOIN comps c ON c.idx >= j.ini AND c.idx < (SELECT idx FROM alvo_idx)
+    LEFT JOIN falha_dist fd
+           ON fd.distribuidora_cnpj = cj.distribuidora_cnpj AND fd.idx = c.idx
+    LEFT JOIN presenca p ON p.conjunto_id = j.conjunto_id AND p.idx = c.idx
+    GROUP BY 1
+),
+-- Conjunto que reportava com regularidade: presente em pelo menos metade das
+-- 12 competências anteriores. Conjunto extinto há anos não deve ser cobrado.
+esperados AS (
+    SELECT conjunto_id FROM presenca
+    WHERE idx >= (SELECT idx FROM alvo_idx) - 12
+    GROUP BY 1 HAVING count(*) >= 6
 ),
 -- Conjunto-mês destoante não entra no baseline: denominador não confiável.
 historico AS (
@@ -83,23 +139,28 @@ observado AS (
     JOIN alvo a ON a.ano = cc.competencia_ano AND a.mes = cc.competencia_mes
     LEFT JOIN indice i USING (competencia_mes)
 ),
+-- Conjunto esperado que não aparece na competência. O motivo separa problema
+-- de fonte (a distribuidora inteira sumiu) de boa notícia (mês sem
+-- interrupção num conjunto isolado).
+ausentes AS (
+    SELECT e.conjunto_id, cj.distribuidora_cnpj,
+           CASE WHEN fd.idx IS NOT NULL THEN 'distribuidora_ausente'
+                ELSE 'conjunto_isolado' END AS motivo
+    FROM esperados e
+    JOIN conjuntos cj ON cj.conjunto_id = e.conjunto_id
+    LEFT JOIN observado o ON o.conjunto_id = e.conjunto_id
+    LEFT JOIN falha_dist fd
+           ON fd.distribuidora_cnpj = cj.distribuidora_cnpj
+          AND fd.idx = (SELECT idx FROM alvo_idx)
+    WHERE o.conjunto_id IS NULL
+),
 avaliacao AS (
     SELECT
-        o.conjunto_id,
-        o.competencia_ano,
-        o.competencia_mes,
-        o.distribuidora_cnpj,
-        o.dec_aprox,
-        o.dec_norm,
-        o.consumidores_afetados,
-        o.consumidores_ativos,
-        o.eventos,
-        b.pontos,
-        (SELECT total FROM competencias_possiveis) - coalesce(b.pontos, 0) AS meses_faltando,
-        b.mediana,
-        b.q1,
-        b.q3,
-        b.q3 - b.q1 AS iqr,
+        o.conjunto_id, o.distribuidora_cnpj,
+        o.dec_aprox, o.dec_norm, o.consumidores_afetados,
+        o.consumidores_ativos, o.eventos,
+        b.pontos, b.mediana, b.q1, b.q3, b.q3 - b.q1 AS iqr,
+        bu.buracos_envio, bu.buracos_conjunto,
         CASE WHEN o.conjunto_id = 0            THEN 'conjunto_invalido'
              WHEN NOT o.cobertura_ok
                OR NOT o.cobertura_distribuidora_ok THEN 'cobertura'
@@ -109,6 +170,7 @@ avaliacao AS (
              WHEN coalesce(b.pontos, 0) < %(minimo_pontos)s THEN 'sem_baseline'
              ELSE 'avaliado'
         END AS situacao,
+        NULL::text AS motivo_ausencia,
         EXISTS (
             SELECT 1 FROM conjunto_reconfiguracoes r
             WHERE r.conjunto_id = o.conjunto_id
@@ -116,49 +178,86 @@ avaliacao AS (
                   <= (o.competencia_ano * 100 + o.competencia_mes)
         ) AS reconfiguracao
     FROM observado o
-    LEFT JOIN baseline b USING (conjunto_id)
+    LEFT JOIN baseline b ON b.conjunto_id = o.conjunto_id
+    LEFT JOIN buracos  bu ON bu.conjunto_id = o.conjunto_id
+
+    UNION ALL
+
+    SELECT
+        au.conjunto_id, au.distribuidora_cnpj,
+        NULL, NULL, NULL, NULL, NULL,
+        b.pontos, b.mediana, b.q1, b.q3, b.q3 - b.q1,
+        bu.buracos_envio, bu.buracos_conjunto,
+        'ausente', au.motivo,
+        EXISTS (
+            SELECT 1 FROM conjunto_reconfiguracoes r, alvo a
+            WHERE r.conjunto_id = au.conjunto_id
+              AND (r.competencia_ano * 100 + r.competencia_mes) <= (a.ano * 100 + a.mes)
+        )
+    FROM ausentes au
+    LEFT JOIN baseline b ON b.conjunto_id = au.conjunto_id
+    LEFT JOIN buracos  bu ON bu.conjunto_id = au.conjunto_id
+),
+classificado AS (
+    SELECT *,
+        CASE WHEN situacao <> 'avaliado' THEN NULL
+             -- Tukey só para cima. Para baixo a cerca é inalcançável: o DEC
+             -- não fica negativo e q1 - 1,5*IQR <= 0 em 2.619 dos 2.962.
+             WHEN dec_norm > q3 + 3.0 * iqr THEN 'alta'
+             WHEN dec_norm > q3 + 1.5 * iqr THEN 'moderada'
+             -- Queda por razão: caiu a menos de um quarto do normal. Não é
+             -- alerta, é sinal de qualidade — pode ser rede melhorando ou
+             -- distribuidora deixando de reportar.
+             WHEN dec_norm < %(razao_queda)s * mediana THEN 'queda'
+             ELSE 'normal'
+        END AS severidade
+    FROM avaliacao
 )
 SELECT
     %(run_id)s,
     conjunto_id,
-    competencia_ano,
-    competencia_mes,
+    (SELECT ano FROM alvo),
+    (SELECT mes FROM alvo),
     distribuidora_cnpj,
     situacao,
+    motivo_ausencia,
     dec_aprox,
     dec_norm,
     consumidores_afetados,
     consumidores_ativos,
     eventos,
     pontos,
-    meses_faltando,
+    buracos_envio,
+    buracos_conjunto,
     mediana,
     q1,
     q3,
     iqr,
     q3 + 1.5 * iqr AS limite_alerta,
     CASE WHEN iqr > 0 THEN (dec_norm - mediana) / iqr END AS desvio_iqr,
-    CASE WHEN situacao <> 'avaliado' THEN NULL
-         -- Tukey, só para cima: conjunto muito abaixo do próprio baseline não
-         -- é fila de investigação.
-         WHEN dec_norm > q3 + 3.0 * iqr THEN 'alta'
-         WHEN dec_norm > q3 + 1.5 * iqr THEN 'moderada'
-         WHEN dec_norm < q1 - 1.5 * iqr THEN 'queda'
-         ELSE 'normal'
-    END AS severidade,
+    severidade,
     reconfiguracao,
-    meses_faltando > %(maximo_buracos)s AS baseline_esburacado
-FROM avaliacao
+    coalesce(buracos_envio, 0) >= 1 AS baseline_esburacado,
+    -- Saturação da frota: quanto da frota avaliada da distribuidora alertou
+    -- nesta competência.
+    count(*) FILTER (WHERE severidade IN ('alta', 'moderada'))
+        OVER (PARTITION BY distribuidora_cnpj)::double precision
+    / nullif(count(*) FILTER (WHERE situacao = 'avaliado')
+        OVER (PARTITION BY distribuidora_cnpj), 0) AS saturacao_frota
+FROM classificado
 ON CONFLICT (pipeline_run_id, conjunto_id, competencia_ano, competencia_mes)
 DO UPDATE SET
     situacao                = EXCLUDED.situacao,
+    motivo_ausencia         = EXCLUDED.motivo_ausencia,
     dec_aprox               = EXCLUDED.dec_aprox,
     dec_normalizado         = EXCLUDED.dec_normalizado,
     consumidores_afetados   = EXCLUDED.consumidores_afetados,
     consumidores_ativos     = EXCLUDED.consumidores_ativos,
     eventos                 = EXCLUDED.eventos,
     baseline_pontos         = EXCLUDED.baseline_pontos,
-    baseline_meses_faltando = EXCLUDED.baseline_meses_faltando,
+    buracos_envio           = EXCLUDED.buracos_envio,
+    buracos_conjunto        = EXCLUDED.buracos_conjunto,
+    saturacao_frota         = EXCLUDED.saturacao_frota,
     baseline_mediana        = EXCLUDED.baseline_mediana,
     baseline_q1             = EXCLUDED.baseline_q1,
     baseline_q3             = EXCLUDED.baseline_q3,
@@ -196,8 +295,18 @@ def detectar(conn: psycopg.Connection, run_id: int,
             "mes": mes,
             "minimo_pontos": MINIMO_PONTOS,
             "minimo_ativos": MINIMO_ATIVOS,
-            "maximo_buracos": MAXIMO_BURACOS,
+            "razao_queda": RAZAO_QUEDA,
         })
+
+        # Distribuidora que some tem de aparecer na carga seguinte sem
+        # ninguém ir procurar.
+        cur.execute("""
+            UPDATE pipeline_runs SET distribuidoras_ausentes = (
+                SELECT count(DISTINCT distribuidora_cnpj) FROM anomalias
+                WHERE pipeline_run_id = %s AND competencia_ano = %s AND competencia_mes = %s
+                  AND motivo_ausencia = 'distribuidora_ausente')
+            WHERE id = %s
+        """, (run_id, ano, mes, run_id))
 
         cur.execute("""
             SELECT situacao, severidade, count(*)

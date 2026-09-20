@@ -628,6 +628,41 @@ ficam abaixo dele, com 1 a 39 ativos — entre eles o 17402 de jan/2025, já
 marcado como destoante. Não há nada entre 39 e 711: o corte cai num vazio
 natural da distribuição.
 
+### Queda: Tukey para baixo é inalcançável
+
+A classificação de queda usava a cerca de Tukey (`q1 − 1,5·IQR`), simétrica à
+de cima. Medindo em 07/2026, sobre 2.962 conjuntos avaliados:
+
+```
+cerca q1 − 1,5·IQR ≤ 0:   2.619 conjuntos  (88%)
+cerca q1 − 3,0·IQR ≤ 0:   2.958 conjuntos  (99,9%)
+conjuntos abaixo da cerca de 1,5:   1
+conjuntos abaixo da cerca de 3,0:   0
+```
+
+O DEC tem piso em zero, então a cauda inferior é curta e a cerca cai abaixo de
+zero na quase totalidade dos casos: a queda era estruturalmente impossível.
+
+**Alternativa avaliada — Tukey em escala log.** É a correção estatisticamente
+mais correta, porque torna as cercas multiplicativas e simétricas. Simulada em
+07/2026:
+
+| | Tukey linear (atual) | Tukey em log |
+|---|---|---|
+| alta | 199 | 60 |
+| moderada | 159 | 97 |
+| queda | 1 | 25 |
+
+**Descartada conscientemente:** ela conserta a queda, mas reclassifica o lado de
+cima, derrubando os altos de 199 para 60 e transformando 157 das 159 moderadas
+em normais. Mudaria a fila já validada caso a caso, e o ganho é na cauda que
+não é o objeto do produto.
+
+**Decisão:** queda por razão contra a mediana — `dec_norm < 0,25 × mediana`,
+"caiu a menos de um quarto do normal". Dá 40 casos em 07/2026 (com 0,5× seriam
+226, demais para um sinal que fica fora da fila). O lado de cima continua com
+Tukey linear, intocado.
+
 ### Sigla e nome chegam com espaços à direita
 
 As 52 siglas de distribuidora vêm preenchidas com espaços à direita na
