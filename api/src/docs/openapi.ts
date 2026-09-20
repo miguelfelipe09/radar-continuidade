@@ -160,12 +160,15 @@ const itemFila = {
     motivo_ausencia: {
       type: 'string',
       nullable: true,
-      enum: ['distribuidora_ausente', 'conjunto_isolado'],
-      description:
-        '`distribuidora_ausente`: a distribuidora inteira parou de enviar — ' +
-        'problema de fonte. `conjunto_isolado`: a distribuidora enviou ' +
-        'normalmente e só este conjunto não apareceu — provavelmente mês sem ' +
-        'interrupção, que é boa notícia.',
+      enum: ['distribuidora_ausente', 'conjunto_encerrado', 'conjunto_isolado'],
+      description: [
+        'Ausência tem três leituras, e só a última é boa notícia:',
+        '- `distribuidora_ausente`: a distribuidora inteira parou de enviar. Problema de fonte. Em 2026-07 são 45 conjuntos da CPFL-PIRATINING, sem envio desde 2026-03.',
+        '- `conjunto_encerrado`: ausente há 3 competências ou mais, com a distribuidora enviando normalmente — o código de conjunto foi aposentado. Em 2026-07 são 85, todos das seis distribuidoras que renumeraram a frota na virada de 2026.',
+        '- `conjunto_isolado`: faltou nesta competência e estava presente na anterior. Provavelmente mês sem nenhuma interrupção.',
+        '',
+        'O campo `observacao` traz a frase pronta, com a competência do último registro.',
+      ].join('\n'),
     },
     observacao: { type: 'string', nullable: true },
     consumidores_afetados: {
@@ -427,7 +430,20 @@ export const openapi = {
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/Fila' },
-                example: exemplos.fila,
+                examples: {
+                  alertas: {
+                    summary: 'Conjuntos com desvio (severidade alta e moderada)',
+                    value: exemplos.fila,
+                  },
+                  ausentes: {
+                    summary: 'Ausência de dado — falta de envio, não falta de problema',
+                    description:
+                      'Os dois motivos de ausência lado a lado. A observação diz ' +
+                      'desde quando, para o item não ser lido como "conjunto sem ' +
+                      'problemas".',
+                    value: exemplos.filaAusentes,
+                  },
+                },
               },
             },
           },
@@ -609,11 +625,47 @@ export const openapi = {
             description: 'Comparação com a competência anterior da mesma execução.',
             properties: {
               competencia_anterior: { type: 'string', nullable: true },
+              alertas_atual: {
+                type: 'integer',
+                description: 'Total de alta + moderada nesta competência.',
+              },
               alertas_anterior: { type: 'integer', nullable: true },
-              variacao_alertas: { type: 'integer', nullable: true },
-              entraram_na_fila: { type: 'integer', nullable: true },
+              variacao_alertas: {
+                type: 'integer',
+                nullable: true,
+                description: 'alertas_atual − alertas_anterior.',
+              },
+              entraram_na_fila: {
+                type: 'integer',
+                nullable: true,
+                description: [
+                  'Conjuntos que alertam agora e não alertavam na competência',
+                  'anterior.',
+                  '',
+                  '**Não use como manchete.** A rotatividade normal da fila fica',
+                  'entre 62% e 95% do total, medido nas competências de 2026-03 a',
+                  '2026-07: a fila se renova quase inteira todo mês, porque o',
+                  'alerta é sobre o desvio daquele mês, não sobre um estado que',
+                  'persiste. Para destaque, use `pioraram` e `reincidentes`.',
+                ].join('\n'),
+              },
               sairam_da_fila: { type: 'integer', nullable: true },
-              novos_destaques: { type: 'array', items: { type: 'object' } },
+              pioraram: {
+                type: 'array',
+                description:
+                  'Conjuntos que subiram de moderada para alta em relação à ' +
+                  'competência anterior. Os 5 maiores por consumidores afetados.',
+                items: { type: 'object' },
+              },
+              reincidentes: {
+                type: 'array',
+                description:
+                  'Conjuntos que alertam em 3 competências seguidas. É a ' +
+                  'informação que a comparação entre execuções revela e a fila ' +
+                  'sozinha não mostra: em 2026-07 são 8 conjuntos, contra 57 ' +
+                  'que alertam em 2 dos últimos 3 meses.',
+                items: { type: 'object' },
+              },
             },
           },
           destaques: {

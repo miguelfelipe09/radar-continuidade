@@ -22,6 +22,33 @@ export function inteiro(valor: number | string | null): number | null {
   return Number(valor);
 }
 
+/** Ausência tem três leituras distintas, e a frase precisa separá-las: falta
+ *  de dado da fonte, código de conjunto aposentado, e mês sem interrupção.
+ *  Só o terceiro é boa notícia. */
+function observacaoAusencia(linha: LinhaFila): string {
+  const ultimoRegistro =
+    linha.ultimo_registro_ano && linha.ultimo_registro_mes
+      ? rotulo(linha.ultimo_registro_ano, linha.ultimo_registro_mes)
+      : null;
+
+  if (linha.motivo_ausencia === 'distribuidora_ausente') {
+    const desde = linha.ultimo_envio_ano
+      ? rotulo(linha.ultimo_envio_ano, linha.ultimo_envio_mes!)
+      : ultimoRegistro;
+    return desde
+      ? `A distribuidora não envia dados desde ${desde}. Ausência de envio, não de interrupções.`
+      : 'A distribuidora não enviou dados nesta competência.';
+  }
+
+  if (linha.motivo_ausencia === 'conjunto_encerrado') {
+    return ultimoRegistro
+      ? `Sem registros desde ${ultimoRegistro}. O código de conjunto provavelmente foi aposentado.`
+      : 'Sem registros há vários meses. O código de conjunto provavelmente foi aposentado.';
+  }
+
+  return 'Conjunto sem interrupções registradas nesta competência.';
+}
+
 export function itemFila(linha: LinhaFila): ItemFila {
   const saturacao = num(linha.saturacao_frota, 4);
   const temBaseline = linha.baseline_mediana !== null && linha.baseline_iqr !== null;
@@ -62,14 +89,7 @@ export function itemFila(linha: LinhaFila): ItemFila {
 
   if (linha.situacao === 'ausente') {
     item.motivo_ausencia = linha.motivo_ausencia as MotivoAusencia;
-    if (linha.motivo_ausencia === 'distribuidora_ausente' && linha.ultimo_envio_ano) {
-      item.observacao = `Sem envio desde ${rotulo(
-        linha.ultimo_envio_ano,
-        linha.ultimo_envio_mes!,
-      )}`;
-    } else {
-      item.observacao = 'Conjunto sem interrupções registradas nesta competência';
-    }
+    item.observacao = observacaoAusencia(linha);
   }
 
   return item;

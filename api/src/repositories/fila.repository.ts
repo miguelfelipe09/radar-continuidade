@@ -11,6 +11,8 @@ export interface LinhaFila {
   situacao: Situacao;
   severidade: Severidade | null;
   motivo_ausencia: string | null;
+  ultimo_registro_ano: number | null;
+  ultimo_registro_mes: number | null;
   consumidores_afetados: string | null;
   consumidores_ativos: number | null;
   eventos: number | null;
@@ -49,6 +51,8 @@ const COLUNAS = `
     a.situacao,
     a.severidade,
     a.motivo_ausencia,
+    a.ultimo_registro_ano,
+    a.ultimo_registro_mes,
     a.consumidores_afetados::text AS consumidores_afetados,
     a.consumidores_ativos,
     a.eventos,

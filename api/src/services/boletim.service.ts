@@ -6,6 +6,11 @@ import { ContextoRepository } from '../repositories/contexto.repository';
 import { FilaRepository } from '../repositories/fila.repository';
 import { competenciaDto, itemFila, num } from './mapeadores';
 
+/** Competências seguidas para um conjunto contar como reincidente. Em
+ *  07/2026, 8 conjuntos alertam nos 3 meses seguidos, contra 57 que alertam
+ *  em 2 dos últimos 3 — três é o corte que ainda cabe numa tela. */
+const MESES_REINCIDENCIA = 3;
+
 const EXCLUSOES = [
   'conjunto_invalido',
   'destoante',
@@ -58,9 +63,12 @@ export class BoletimService {
     const alertasAtuais =
       (porSeveridade.get('alta') ?? 0) + (porSeveridade.get('moderada') ?? 0);
 
-    const delta = anterior
-      ? await this.boletimRepo.delta(ctx.runId, ctx.ano, ctx.mes, anterior.ano, anterior.mes)
-      : null;
+    const [delta, reincidentes] = await Promise.all([
+      anterior
+        ? this.boletimRepo.delta(ctx.runId, ctx.ano, ctx.mes, anterior.ano, anterior.mes)
+        : Promise.resolve(null),
+      this.boletimRepo.reincidentes(ctx.runId, ctx.ano, ctx.mes, MESES_REINCIDENCIA),
+    ]);
 
     return {
       competencia: competenciaDto(ctx.ano, ctx.mes),
@@ -94,15 +102,24 @@ export class BoletimService {
       },
       delta: {
         competencia_anterior: anterior ? rotulo(anterior.ano, anterior.mes) : null,
+        alertas_atual: alertasAtuais,
         alertas_anterior: delta ? delta.alertas_anterior : null,
         variacao_alertas: delta ? alertasAtuais - delta.alertas_anterior : null,
         entraram_na_fila: delta ? delta.entraram : null,
         sairam_da_fila: delta ? delta.sairam : null,
-        novos_destaques: (delta?.novos ?? []).map((n) => ({
-          conjunto: { id: n.conjunto_id, nome: n.conjunto_nome },
-          distribuidora: { sigla: n.sigla, cnpj: formatarCnpj(n.cnpj) },
-          severidade: n.severidade as Severidade,
-          consumidores_afetados: Number(n.consumidores_afetados),
+        pioraram: (delta?.pioraram ?? []).map((p) => ({
+          conjunto: { id: p.conjunto_id, nome: p.conjunto_nome },
+          distribuidora: { sigla: p.sigla, cnpj: formatarCnpj(p.cnpj) },
+          de: p.de as Severidade,
+          para: p.para as Severidade,
+          consumidores_afetados: Number(p.consumidores_afetados),
+        })),
+        reincidentes: reincidentes.map((r) => ({
+          conjunto: { id: r.conjunto_id, nome: r.conjunto_nome },
+          distribuidora: { sigla: r.sigla, cnpj: formatarCnpj(r.cnpj) },
+          severidade: r.severidade as Severidade,
+          meses_seguidos: r.meses_seguidos,
+          consumidores_afetados: Number(r.consumidores_afetados),
         })),
       },
       destaques: {

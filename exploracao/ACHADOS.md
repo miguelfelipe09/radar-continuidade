@@ -628,6 +628,112 @@ ficam abaixo dele, com 1 a 39 ativos — entre eles o 17402 de jan/2025, já
 marcado como destoante. Não há nada entre 39 e 711: o corte cai num vazio
 natural da distribuição.
 
+### A frota muda por baixo: comparação ano a ano precisa ser pareada
+
+Ao desenhar o ranking por distribuidora surgiu a dúvida se a base de
+comparação do mesmo mês do ano anterior está íntegra. Medido em quatro
+competências de 2026:
+
+```
+alvo       distribuidoras   base ausente   base parcial   base ok
+2026-01          49              0              0            49
+2026-03          49              0              0            49
+2026-05          49              0              0            49
+2026-07          50              0              0            50
+```
+
+No grão distribuidora-competência a base é **100% íntegra** — a hipótese de
+que faltaria cobertura não se confirmou.
+
+O problema está um grão abaixo. Como o indicador da distribuidora é a mediana
+**sobre os conjuntos**, o que importa é a frota ser a mesma nos dois meses. Em
+jul/2026 contra jul/2025:
+
+| Distribuidora | Conjuntos em jul/2026 | Em ambos | Sobreposição |
+|---|---|---|---|
+| DMED | 4 | 0 | **0%** |
+| EQUATORIAL MA | 117 | 70 | 60% |
+| ETO | 57 | 38 | 67% |
+| SAELPA | 72 | 51 | 71% |
+| Neoenergia PE | 142 | 125 | 88% |
+| EDP ES | 44 | 40 | 91% |
+
+As outras 44 têm 95% ou mais. A DMED trocou os quatro códigos de conjunto na
+virada do ano — 12777, 12780 e 12783 vão até dez/2025; 17437 a 17440 começam
+em jan/2026 — e compararia duas frotas sem um único conjunto em comum.
+
+É o mesmo fenômeno da reconfiguração de abril/2025 (§4), num grão diferente:
+lá o conjunto continuava e mudava de tamanho; aqui o código do conjunto é
+substituído.
+
+**Decisão:** a variação contra o ano anterior é calculada **apenas sobre os
+conjuntos presentes nos dois meses**, e a resposta da API devolve sempre a
+sobreposição junto do número. Abaixo de 50% de sobreposição a variação vai
+nula, com motivo. É a aplicação literal do que a §8 já determina —
+"comparações devem ser sempre por conjunto, nunca por total agregado".
+
+> Não trocar isso por uma comparação de totais agregados depois: o número
+> volta a mentir exatamente nesses seis casos, e de forma silenciosa.
+
+**A detecção não é afetada.** Verificado: os 91 conjuntos das quatro
+distribuidoras de baixa sobreposição presentes em jul/2026 e ausentes em
+jul/2025 estão todos em `sem_baseline`, com 6 pontos cada, nenhum com 12 ou
+mais. Nenhum conjunto é avaliado contra o histórico de outra frota.
+
+### A fila se renova quase inteira todo mês
+
+Ao montar o boletim, medida a rotatividade da fila entre competências
+consecutivas de 2026:
+
+| Competência | Alertas | Entraram | % da fila | Saíram |
+|---|---|---|---|---|
+| 2026-03 | 110 | 68 | 62% | 218 |
+| 2026-04 | 152 | 145 | 95% | 103 |
+| 2026-05 | 204 | 175 | 86% | 123 |
+| 2026-06 | 195 | 154 | 79% | 163 |
+| 2026-07 | 358 | 324 | 91% | 161 |
+
+Entre 62% e 95% dos alertas são novos a cada mês. Não é defeito: o alerta é
+sobre o desvio **daquela competência**, não sobre um estado que persiste. Mas
+significa que "324 conjuntos entraram na fila" parece manchete e é rotina.
+
+**Decisão:** o campo continua na API, com a faixa documentada no Swagger para
+quem consome não o ler como notícia. O destaque do boletim passa a ser o que
+*não* é rotina: conjuntos que **pioraram de severidade** (moderada para alta)
+e os **reincidentes** — na fila em 3 competências seguidas. Em 07/2026 são 8
+reincidentes, contra 57 que alertam em 2 dos últimos 3 meses.
+
+### Código de conjunto aposentado não é mês sem interrupção
+
+A situação `ausente` nasceu com dois motivos, e o segundo estava errado. Dos
+131 ausentes em 07/2026, 85 vinham como `conjunto_isolado`, com a mensagem
+"sem interrupções registradas nesta competência". São estas as distribuidoras
+deles:
+
+```
+EQUATORIAL MA 28 · SAELPA 24 · ETO 17 · Neoenergia PE 9 · EDP ES 4 · DMED 3
+```
+
+Exatamente as **seis da tabela de baixa sobreposição** acima — as que
+renumeraram a frota. E todos os 85 estão ausentes há precisamente 7 meses,
+isto é, desde dez/2025. Não são conjuntos quietos: são códigos aposentados, e
+a mensagem afirmava o contrário do que acontecia.
+
+**Decisão:** terceiro motivo, `conjunto_encerrado`, para ausência de **3
+competências ou mais** com a distribuidora enviando normalmente. Um mês de
+falta é plausível e dois ainda são; três não. A escolha é semântica e não
+ajuste aos dados — hoje todos os casos estão em 7 meses, então qualquer corte
+entre 2 e 7 daria a mesma divisão.
+
+Com a regra, 07/2026 fica com **85 encerrados, 46 por distribuidora ausente e
+0 isolados**, e a mensagem passa a ser "Sem registros desde 2025-12. O código
+de conjunto provavelmente foi aposentado".
+
+> O preço é um atraso de duas competências: no mês em que o código some, ele
+> ainda aparece como isolado. Inevitável — não dá para saber que um código foi
+> aposentado no mês em que ele falta pela primeira vez. Em 06/2026 a regra
+> separa corretamente 2 casos genuínos de mês isolado dos 85 encerrados.
+
 ### Queda: Tukey para baixo é inalcançável
 
 A classificação de queda usava a cerca de Tukey (`q1 − 1,5·IQR`), simétrica à

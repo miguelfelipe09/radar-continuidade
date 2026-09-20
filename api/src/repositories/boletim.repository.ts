@@ -111,12 +111,13 @@ export class BoletimRepository {
     alertas_anterior: number;
     entraram: number;
     sairam: number;
-    novos: Array<{
+    pioraram: Array<{
       conjunto_id: number;
       conjunto_nome: string | null;
       cnpj: string;
       sigla: string;
-      severidade: string;
+      de: string;
+      para: string;
       consumidores_afetados: string;
     }>;
   }> {
@@ -139,20 +140,22 @@ export class BoletimRepository {
       [runId, ano, mes, anoAnt, mesAnt],
     );
 
-    const { rows: novos } = await this.pool.query(
+    // Piora de severidade: o conjunto já estava na fila e subiu de patamar.
+    // Diz mais que "entrou na fila", porque a fila se renova quase inteira
+    // todo mês.
+    const { rows: pioraram } = await this.pool.query(
       `SELECT a.conjunto_id::int AS conjunto_id, c.nome AS conjunto_nome,
               a.distribuidora_cnpj::text AS cnpj, d.sigla,
-              a.severidade, a.consumidores_afetados::text AS consumidores_afetados
+              b.severidade AS de, a.severidade AS para,
+              a.consumidores_afetados::text AS consumidores_afetados
          FROM anomalias a
+         JOIN anomalias b
+           ON b.pipeline_run_id = a.pipeline_run_id AND b.conjunto_id = a.conjunto_id
+          AND b.competencia_ano = $4 AND b.competencia_mes = $5
          JOIN conjuntos c ON c.conjunto_id = a.conjunto_id
          JOIN distributors d ON d.cnpj = a.distribuidora_cnpj
         WHERE a.pipeline_run_id = $1 AND a.competencia_ano = $2 AND a.competencia_mes = $3
-          AND a.${alerta}
-          AND NOT EXISTS (
-              SELECT 1 FROM anomalias b
-               WHERE b.pipeline_run_id = $1 AND b.competencia_ano = $4
-                 AND b.competencia_mes = $5 AND b.conjunto_id = a.conjunto_id
-                 AND b.${alerta})
+          AND a.severidade = 'alta' AND b.severidade = 'moderada'
         ORDER BY a.consumidores_afetados DESC NULLS LAST
         LIMIT 5`,
       [runId, ano, mes, anoAnt, mesAnt],
@@ -162,7 +165,53 @@ export class BoletimRepository {
       alertas_anterior: resumo[0].alertas_anterior,
       entraram: resumo[0].entraram,
       sairam: resumo[0].sairam,
-      novos,
+      pioraram,
     };
+  }
+
+  /** Conjuntos na fila em N competências seguidas terminando na atual.
+   *  Reincidência é o que a comparação entre execuções revela e a fila
+   *  sozinha não mostra. */
+  async reincidentes(
+    runId: number,
+    ano: number,
+    mes: number,
+    meses: number,
+  ): Promise<
+    Array<{
+      conjunto_id: number;
+      conjunto_nome: string | null;
+      cnpj: string;
+      sigla: string;
+      severidade: string;
+      meses_seguidos: number;
+      consumidores_afetados: string;
+    }>
+  > {
+    const { rows } = await this.pool.query(
+      `WITH janela AS (
+           SELECT generate_series(($1 * 12 + $2 - 1) - ($3 - 1), $1 * 12 + $2 - 1) AS idx),
+       presentes AS (
+           SELECT conjunto_id, count(*)::int AS meses_seguidos
+             FROM anomalias
+            WHERE pipeline_run_id = $4
+              AND severidade IN ('alta','moderada')
+              AND (competencia_ano * 12 + competencia_mes - 1) IN (SELECT idx FROM janela)
+            GROUP BY 1
+           HAVING count(*) = $3)
+       SELECT a.conjunto_id::int AS conjunto_id, c.nome AS conjunto_nome,
+              a.distribuidora_cnpj::text AS cnpj, d.sigla, a.severidade,
+              p.meses_seguidos,
+              a.consumidores_afetados::text AS consumidores_afetados
+         FROM presentes p
+         JOIN anomalias a ON a.conjunto_id = p.conjunto_id
+          AND a.pipeline_run_id = $4 AND a.competencia_ano = $1 AND a.competencia_mes = $2
+         JOIN conjuntos c ON c.conjunto_id = a.conjunto_id
+         JOIN distributors d ON d.cnpj = a.distribuidora_cnpj
+        ORDER BY a.consumidores_afetados DESC NULLS LAST
+        LIMIT 5`,
+      [ano, mes, meses, runId],
+    );
+    return rows;
   }
 }

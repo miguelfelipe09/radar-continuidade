@@ -36,7 +36,10 @@ export type Situacao =
   | 'denominador'
   | 'sem_baseline';
 
-export type MotivoAusencia = 'distribuidora_ausente' | 'conjunto_isolado';
+export type MotivoAusencia =
+  | 'distribuidora_ausente'
+  | 'conjunto_encerrado'
+  | 'conjunto_isolado';
 
 export interface Baseline {
   mediana: number;
@@ -136,14 +139,30 @@ export interface RespostaBoletim {
   alertas: Record<string, number>;
   delta: {
     competencia_anterior: string | null;
+    /** Total desta competência, ao lado da variação: sem ele o número não se
+     *  lê sozinho. */
+    alertas_atual: number;
     alertas_anterior: number | null;
     variacao_alertas: number | null;
+    /** Rotatividade normal fica entre 62% e 95% do total — a fila se renova
+     *  quase inteira todo mês, porque o alerta é sobre o desvio daquele mês.
+     *  Não é manchete. */
     entraram_na_fila: number | null;
     sairam_da_fila: number | null;
-    novos_destaques: Array<{
+    /** Subiram de moderada para alta em relação à competência anterior. */
+    pioraram: Array<{
+      conjunto: ConjuntoResumo;
+      distribuidora: DistribuidoraResumo;
+      de: Severidade;
+      para: Severidade;
+      consumidores_afetados: number;
+    }>;
+    /** Na fila em competências consecutivas — o que a fila sozinha não mostra. */
+    reincidentes: Array<{
       conjunto: ConjuntoResumo;
       distribuidora: DistribuidoraResumo;
       severidade: Severidade;
+      meses_seguidos: number;
       consumidores_afetados: number;
     }>;
   };

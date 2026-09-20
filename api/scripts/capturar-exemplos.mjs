@@ -14,6 +14,7 @@ const chamadas = {
   boletim: '/api/v1/boletim',
   ranking: '/api/v1/ranking?limite=3',
   fila: '/api/v1/fila?severidade=alta,moderada&tamanho=2',
+  filaAusentes: '/api/v1/fila?situacao=ausente&tamanho=2',
   conjunto: '/api/v1/conjuntos/16900',
 };
 

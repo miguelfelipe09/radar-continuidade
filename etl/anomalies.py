@@ -26,11 +26,16 @@ MINIMO_PONTOS = 12
 MINIMO_ATIVOS = 100
 # Queda: caiu a menos de um quarto da mediana do próprio baseline.
 RAZAO_QUEDA = 0.25
+# Ausência por este número de meses seguidos, com a distribuidora enviando
+# normalmente, é código de conjunto aposentado — não mês sem interrupção.
+# Um mês de falta é plausível e dois ainda são; três não.
+MESES_ENCERRADO = 3
 
 DETECTAR = """
 INSERT INTO anomalias (
     pipeline_run_id, conjunto_id, competencia_ano, competencia_mes, distribuidora_cnpj,
-    situacao, motivo_ausencia, dec_aprox, dec_normalizado, consumidores_afetados,
+    situacao, motivo_ausencia, ultimo_registro_ano, ultimo_registro_mes,
+    dec_aprox, dec_normalizado, consumidores_afetados,
     consumidores_ativos, eventos, baseline_pontos, buracos_envio, buracos_conjunto,
     baseline_mediana, baseline_q1, baseline_q3, baseline_iqr, limite_alerta,
     desvio_iqr, severidade, reconfiguracao, baseline_esburacado, saturacao_frota
@@ -142,12 +147,25 @@ observado AS (
 -- Conjunto esperado que não aparece na competência. O motivo separa problema
 -- de fonte (a distribuidora inteira sumiu) de boa notícia (mês sem
 -- interrupção num conjunto isolado).
+ultimo_registro AS (
+    SELECT conjunto_id, max(idx) AS idx FROM presenca GROUP BY 1
+),
 ausentes AS (
     SELECT e.conjunto_id, cj.distribuidora_cnpj,
-           CASE WHEN fd.idx IS NOT NULL THEN 'distribuidora_ausente'
-                ELSE 'conjunto_isolado' END AS motivo
+           (u.idx / 12)::smallint          AS ultimo_ano,
+           (mod(u.idx, 12) + 1)::smallint  AS ultimo_mes,
+           CASE
+                WHEN fd.idx IS NOT NULL THEN 'distribuidora_ausente'
+                -- Ausente há vários meses seguidos enquanto a distribuidora
+                -- envia normalmente: o código foi aposentado, não é mês
+                -- quieto. Um mês de falta é plausível; três, não.
+                WHEN (SELECT idx FROM alvo_idx) - u.idx >= %(meses_encerrado)s
+                    THEN 'conjunto_encerrado'
+                ELSE 'conjunto_isolado'
+           END AS motivo
     FROM esperados e
     JOIN conjuntos cj ON cj.conjunto_id = e.conjunto_id
+    JOIN ultimo_registro u ON u.conjunto_id = e.conjunto_id
     LEFT JOIN observado o ON o.conjunto_id = e.conjunto_id
     LEFT JOIN falha_dist fd
            ON fd.distribuidora_cnpj = cj.distribuidora_cnpj
@@ -161,6 +179,8 @@ avaliacao AS (
         o.consumidores_ativos, o.eventos,
         b.pontos, b.mediana, b.q1, b.q3, b.q3 - b.q1 AS iqr,
         bu.buracos_envio, bu.buracos_conjunto,
+        NULL::smallint AS ultimo_registro_ano,
+        NULL::smallint AS ultimo_registro_mes,
         CASE WHEN o.conjunto_id = 0            THEN 'conjunto_invalido'
              WHEN NOT o.cobertura_ok
                OR NOT o.cobertura_distribuidora_ok THEN 'cobertura'
@@ -188,6 +208,7 @@ avaliacao AS (
         NULL, NULL, NULL, NULL, NULL,
         b.pontos, b.mediana, b.q1, b.q3, b.q3 - b.q1,
         bu.buracos_envio, bu.buracos_conjunto,
+        au.ultimo_ano, au.ultimo_mes,
         'ausente', au.motivo,
         EXISTS (
             SELECT 1 FROM conjunto_reconfiguracoes r, alvo a
@@ -221,6 +242,8 @@ SELECT
     distribuidora_cnpj,
     situacao,
     motivo_ausencia,
+    ultimo_registro_ano,
+    ultimo_registro_mes,
     dec_aprox,
     dec_norm,
     consumidores_afetados,
@@ -249,6 +272,8 @@ ON CONFLICT (pipeline_run_id, conjunto_id, competencia_ano, competencia_mes)
 DO UPDATE SET
     situacao                = EXCLUDED.situacao,
     motivo_ausencia         = EXCLUDED.motivo_ausencia,
+    ultimo_registro_ano     = EXCLUDED.ultimo_registro_ano,
+    ultimo_registro_mes     = EXCLUDED.ultimo_registro_mes,
     dec_aprox               = EXCLUDED.dec_aprox,
     dec_normalizado         = EXCLUDED.dec_normalizado,
     consumidores_afetados   = EXCLUDED.consumidores_afetados,
@@ -296,7 +321,27 @@ def detectar(conn: psycopg.Connection, run_id: int,
             "minimo_pontos": MINIMO_PONTOS,
             "minimo_ativos": MINIMO_ATIVOS,
             "razao_queda": RAZAO_QUEDA,
+            "meses_encerrado": MESES_ENCERRADO,
         })
+
+        # Último envio de cada distribuidora, pré-calculado: o boletim lê
+        # pronto em vez de varrer a agregação a cada chamada.
+        cur.execute("""
+            UPDATE distributors d SET
+                ultimo_envio_ano = u.ano,
+                ultimo_envio_mes = u.mes
+            FROM (
+                SELECT DISTINCT ON (c.distribuidora_cnpj)
+                       c.distribuidora_cnpj,
+                       cc.competencia_ano AS ano,
+                       cc.competencia_mes AS mes
+                FROM conjunto_competencia cc
+                JOIN conjuntos c USING (conjunto_id)
+                ORDER BY c.distribuidora_cnpj,
+                         cc.competencia_ano DESC, cc.competencia_mes DESC
+            ) u
+            WHERE u.distribuidora_cnpj = d.cnpj
+        """)
 
         # Distribuidora que some tem de aparecer na carga seguinte sem
         # ninguém ir procurar.

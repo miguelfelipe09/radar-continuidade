@@ -8,6 +8,7 @@
  *   boletim: /api/v1/boletim
  *   ranking: /api/v1/ranking?limite=3
  *   fila: /api/v1/fila?severidade=alta,moderada&tamanho=2
+ *   filaAusentes: /api/v1/fila?situacao=ausente&tamanho=2
  *   conjunto: /api/v1/conjuntos/16900
  */
 
@@ -48,70 +49,143 @@ export const exemplos: Record<string, unknown> = {
     },
     "delta": {
       "competencia_anterior": "2026-06",
+      "alertas_atual": 358,
       "alertas_anterior": 195,
       "variacao_alertas": 163,
       "entraram_na_fila": 324,
       "sairam_da_fila": 161,
-      "novos_destaques": [
+      "pioraram": [
         {
           "conjunto": {
-            "id": 13317,
-            "nome": "JUREMA"
+            "id": 16524,
+            "nome": "Caxias do Sul 5"
           },
           "distribuidora": {
-            "sigla": "ENEL CE",
-            "cnpj": "07047251000170"
+            "sigla": "RGE SUL",
+            "cnpj": "02016440000162"
           },
-          "severidade": "moderada",
-          "consumidores_afetados": 279285
+          "de": "moderada",
+          "para": "alta",
+          "consumidores_afetados": 73991
         },
         {
           "conjunto": {
-            "id": 13060,
-            "nome": "Muriqui"
+            "id": 13969,
+            "nome": "Ribeirão Preto 5-Ipiranga"
           },
           "distribuidora": {
-            "sigla": "ENEL RJ",
-            "cnpj": "33050071000158"
+            "sigla": "CPFL-PAULISTA",
+            "cnpj": "33050196000188"
           },
-          "severidade": "alta",
-          "consumidores_afetados": 269077
+          "de": "moderada",
+          "para": "alta",
+          "consumidores_afetados": 56614
         },
         {
           "conjunto": {
-            "id": 16900,
-            "nome": "PACIENCIA"
+            "id": 15063,
+            "nome": "BAEPENDI SUBTERRANEO"
           },
           "distribuidora": {
             "sigla": "LIGHT SESA",
             "cnpj": "60444437000146"
           },
+          "de": "moderada",
+          "para": "alta",
+          "consumidores_afetados": 53411
+        },
+        {
+          "conjunto": {
+            "id": 15059,
+            "nome": "HUMAITA SUBTERRANEO"
+          },
+          "distribuidora": {
+            "sigla": "LIGHT SESA",
+            "cnpj": "60444437000146"
+          },
+          "de": "moderada",
+          "para": "alta",
+          "consumidores_afetados": 26517
+        },
+        {
+          "conjunto": {
+            "id": 15047,
+            "nome": "CAMPO MARTE AEREO"
+          },
+          "distribuidora": {
+            "sigla": "LIGHT SESA",
+            "cnpj": "60444437000146"
+          },
+          "de": "moderada",
+          "para": "alta",
+          "consumidores_afetados": 22036
+        }
+      ],
+      "reincidentes": [
+        {
+          "conjunto": {
+            "id": 15886,
+            "nome": "ABAETETUBA II"
+          },
+          "distribuidora": {
+            "sigla": "EQUATORIAL PA",
+            "cnpj": "04895728000180"
+          },
+          "severidade": "moderada",
+          "meses_seguidos": 3,
+          "consumidores_afetados": 178374
+        },
+        {
+          "conjunto": {
+            "id": 15468,
+            "nome": "COQUEIRO"
+          },
+          "distribuidora": {
+            "sigla": "EQUATORIAL PA",
+            "cnpj": "04895728000180"
+          },
+          "severidade": "moderada",
+          "meses_seguidos": 3,
+          "consumidores_afetados": 157879
+        },
+        {
+          "conjunto": {
+            "id": 15898,
+            "nome": "PARADA DO BENTO"
+          },
+          "distribuidora": {
+            "sigla": "EQUATORIAL PA",
+            "cnpj": "04895728000180"
+          },
+          "severidade": "moderada",
+          "meses_seguidos": 3,
+          "consumidores_afetados": 43238
+        },
+        {
+          "conjunto": {
+            "id": 16990,
+            "nome": "Maruim"
+          },
+          "distribuidora": {
+            "sigla": "ENERGIPE",
+            "cnpj": "13017462000163"
+          },
+          "severidade": "moderada",
+          "meses_seguidos": 3,
+          "consumidores_afetados": 17657
+        },
+        {
+          "conjunto": {
+            "id": 16762,
+            "nome": "HAUER"
+          },
+          "distribuidora": {
+            "sigla": "COPEL-DIS",
+            "cnpj": "04368898000106"
+          },
           "severidade": "alta",
-          "consumidores_afetados": 253948
-        },
-        {
-          "conjunto": {
-            "id": 13276,
-            "nome": "DIAS MACEDO"
-          },
-          "distribuidora": {
-            "sigla": "ENEL CE",
-            "cnpj": "07047251000170"
-          },
-          "severidade": "moderada",
-          "consumidores_afetados": 180277
-        },
-        {
-          "conjunto": {
-            "id": 13339,
-            "nome": "MONDUBIM"
-          },
-          "distribuidora": {
-            "sigla": "ENEL CE",
-            "cnpj": "07047251000170"
-          },
-          "severidade": "moderada",
-          "consumidores_afetados": 169060
+          "meses_seguidos": 3,
+          "consumidores_afetados": 17374
         }
       ]
     },
@@ -392,6 +466,86 @@ export const exemplos: Record<string, unknown> = {
           "saturacao_frota": 0.5,
           "evento_regional": true
         }
+      }
+    ]
+  },
+  "filaAusentes": {
+    "competencia": {
+      "ano": 2026,
+      "mes": 7,
+      "rotulo": "2026-07"
+    },
+    "total": 131,
+    "pagina": 1,
+    "tamanho": 2,
+    "itens": [
+      {
+        "conjunto": {
+          "id": 12777,
+          "nome": "INTERLIGAÇÃO"
+        },
+        "distribuidora": {
+          "sigla": "DMED",
+          "cnpj": "23664303000104"
+        },
+        "situacao": "ausente",
+        "severidade": null,
+        "consumidores_afetados": null,
+        "consumidores_ativos": null,
+        "eventos": null,
+        "dec_aprox": null,
+        "dec_normalizado": null,
+        "baseline": {
+          "mediana": 0.23,
+          "iqr": 0.18,
+          "pontos": 24,
+          "limite_alerta": 0.59
+        },
+        "desvio_iqr": null,
+        "contexto": {
+          "reconfiguracao": false,
+          "baseline_esburacado": false,
+          "buracos_envio": 0,
+          "buracos_conjunto": 6,
+          "saturacao_frota": null,
+          "evento_regional": false
+        },
+        "motivo_ausencia": "conjunto_encerrado",
+        "observacao": "Sem registros desde 2025-12. O código de conjunto provavelmente foi aposentado."
+      },
+      {
+        "conjunto": {
+          "id": 12780,
+          "nome": "SATURNINO"
+        },
+        "distribuidora": {
+          "sigla": "DMED",
+          "cnpj": "23664303000104"
+        },
+        "situacao": "ausente",
+        "severidade": null,
+        "consumidores_afetados": null,
+        "consumidores_ativos": null,
+        "eventos": null,
+        "dec_aprox": null,
+        "dec_normalizado": null,
+        "baseline": {
+          "mediana": 0.33,
+          "iqr": 0.21,
+          "pontos": 24,
+          "limite_alerta": 0.73
+        },
+        "desvio_iqr": null,
+        "contexto": {
+          "reconfiguracao": false,
+          "baseline_esburacado": false,
+          "buracos_envio": 0,
+          "buracos_conjunto": 6,
+          "saturacao_frota": null,
+          "evento_regional": false
+        },
+        "motivo_ausencia": "conjunto_encerrado",
+        "observacao": "Sem registros desde 2025-12. O código de conjunto provavelmente foi aposentado."
       }
     ]
   },
