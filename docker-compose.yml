@@ -17,5 +17,19 @@ services:
       timeout: 5s
       retries: 5
 
+  api:
+    build: ./api
+    ports:
+      - "3001:3001"
+    environment:
+      # Dentro da rede do compose o banco atende na 5432, não na 5434
+      # publicada no host.
+      DATABASE_URL: postgresql://app:app@db:5432/continuidade
+      PORT: 3001
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   db_data:

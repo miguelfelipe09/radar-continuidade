@@ -1,0 +1,76 @@
+/** Tradução de linha do banco para DTO. Sem Express, sem SQL. */
+
+import { config } from '../config';
+import { formatarCnpj, rotulo } from '../middlewares/validacao';
+import { LinhaFila } from '../repositories/fila.repository';
+import { Competencia, ItemFila, MotivoAusencia, Severidade, Situacao } from '../models';
+
+export function competenciaDto(ano: number, mes: number): Competencia {
+  return { ano, mes, rotulo: rotulo(ano, mes) };
+}
+
+/** Arredonda para não devolver 11.869999999999999 ao front. */
+export function num(valor: number | string | null, casas = 2): number | null {
+  if (valor === null || valor === undefined) return null;
+  const n = Number(valor);
+  if (Number.isNaN(n)) return null;
+  return Number(n.toFixed(casas));
+}
+
+export function inteiro(valor: number | string | null): number | null {
+  if (valor === null || valor === undefined) return null;
+  return Number(valor);
+}
+
+export function itemFila(linha: LinhaFila): ItemFila {
+  const saturacao = num(linha.saturacao_frota, 4);
+  const temBaseline = linha.baseline_mediana !== null && linha.baseline_iqr !== null;
+
+  const item: ItemFila = {
+    conjunto: { id: linha.conjunto_id, nome: linha.conjunto_nome },
+    distribuidora: {
+      sigla: linha.distribuidora_sigla,
+      cnpj: formatarCnpj(linha.distribuidora_cnpj),
+    },
+    situacao: linha.situacao as Situacao,
+    severidade: (linha.severidade as Severidade) ?? null,
+    consumidores_afetados: inteiro(linha.consumidores_afetados),
+    consumidores_ativos: linha.consumidores_ativos,
+    eventos: linha.eventos,
+    dec_aprox: num(linha.dec_aprox),
+    dec_normalizado: num(linha.dec_normalizado),
+    baseline: temBaseline
+      ? {
+          mediana: num(linha.baseline_mediana)!,
+          iqr: num(linha.baseline_iqr)!,
+          pontos: linha.baseline_pontos ?? 0,
+          limite_alerta: num(linha.limite_alerta)!,
+        }
+      : null,
+    desvio_iqr: num(linha.desvio_iqr, 1),
+    contexto: {
+      reconfiguracao: linha.reconfiguracao,
+      baseline_esburacado: linha.baseline_esburacado,
+      buracos_envio: linha.buracos_envio ?? 0,
+      buracos_conjunto: linha.buracos_conjunto ?? 0,
+      saturacao_frota: saturacao,
+      // Derivado aqui, não armazenado: é regra de apresentação. Frota
+      // inteira alertando é evento sistêmico, não conjunto com problema.
+      evento_regional: (saturacao ?? 0) >= config.limiarEventoRegional,
+    },
+  };
+
+  if (linha.situacao === 'ausente') {
+    item.motivo_ausencia = linha.motivo_ausencia as MotivoAusencia;
+    if (linha.motivo_ausencia === 'distribuidora_ausente' && linha.ultimo_envio_ano) {
+      item.observacao = `Sem envio desde ${rotulo(
+        linha.ultimo_envio_ano,
+        linha.ultimo_envio_mes!,
+      )}`;
+    } else {
+      item.observacao = 'Conjunto sem interrupções registradas nesta competência';
+    }
+  }
+
+  return item;
+}
