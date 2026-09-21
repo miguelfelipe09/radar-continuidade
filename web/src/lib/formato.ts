@@ -66,6 +66,11 @@ export function dataHora(iso: string | null | undefined): string {
   });
 }
 
+/** Concordância: "1 conjunto", "45 conjuntos". */
+export function plural(quantidade: number, singular: string, plural: string): string {
+  return Math.abs(quantidade) === 1 ? singular : plural;
+}
+
 /** O CNPJ já chega com 14 dígitos da API; aqui só recebe a máscara. */
 export function cnpj(valor: string | null | undefined): string {
   if (!valor || valor.length !== 14) return valor ?? TRACO;

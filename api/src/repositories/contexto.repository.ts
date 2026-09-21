@@ -25,14 +25,18 @@ export class ContextoRepository {
       return { runId: rows[0].pipeline_run_id, ano, mes };
     }
 
+    // Competência mais recente com detecção, e a execução mais recente que a
+    // detectou. A ordem importa: ordenar por execução primeiro faria uma
+    // recarga que detectou só um mês esconder as competências posteriores.
     const { rows } = await this.pool.query<{
       pipeline_run_id: number;
       competencia_ano: number;
       competencia_mes: number;
     }>(
-      `SELECT pipeline_run_id, competencia_ano, competencia_mes
+      `SELECT max(pipeline_run_id) AS pipeline_run_id, competencia_ano, competencia_mes
          FROM anomalias
-        ORDER BY pipeline_run_id DESC, competencia_ano DESC, competencia_mes DESC
+        GROUP BY competencia_ano, competencia_mes
+        ORDER BY competencia_ano DESC, competencia_mes DESC
         LIMIT 1`,
     );
     if (!rows[0]) return null;
@@ -43,7 +47,12 @@ export class ContextoRepository {
     };
   }
 
-  /** Competência imediatamente anterior presente na mesma execução. */
+  /** Competência anterior com detecção, **independente da execução**.
+   *
+   *  Numa carga mensal real cada ingestão cria uma execução e detecta só a
+   *  competência nova. Procurar a anterior dentro da mesma execução deixaria
+   *  o delta vazio em toda carga — ou, pior, apontaria para uma competência
+   *  não adjacente quando a execução detectou vários meses fora de ordem. */
   async anterior(ctx: ContextoExecucao): Promise<{ ano: number; mes: number } | null> {
     const { rows } = await this.pool.query<{
       competencia_ano: number;
@@ -51,11 +60,11 @@ export class ContextoRepository {
     }>(
       `SELECT competencia_ano, competencia_mes
          FROM anomalias
-        WHERE pipeline_run_id = $1
-          AND (competencia_ano * 100 + competencia_mes) < ($2 * 100 + $3)
+        WHERE (competencia_ano * 100 + competencia_mes) < ($1 * 100 + $2)
+        GROUP BY competencia_ano, competencia_mes
         ORDER BY competencia_ano DESC, competencia_mes DESC
         LIMIT 1`,
-      [ctx.runId, ctx.ano, ctx.mes],
+      [ctx.ano, ctx.mes],
     );
     if (!rows[0]) return null;
     return { ano: rows[0].competencia_ano, mes: rows[0].competencia_mes };

@@ -101,8 +101,10 @@ export class BoletimRepository {
 
   /** Delta entre a competência e a anterior da mesma execução: quem entrou na
    *  fila, quem saiu, e os maiores entrantes. */
+  /** Cada competência é lida na execução mais recente que a detectou. Amarrar
+   *  as duas pontas à mesma execução quebraria numa carga mensal real, em que
+   *  cada ingestão detecta só a competência nova. */
   async delta(
-    runId: number,
     ano: number,
     mes: number,
     anoAnt: number,
@@ -124,41 +126,55 @@ export class BoletimRepository {
     const alerta = `severidade IN ('alta','moderada')`;
 
     const { rows: resumo } = await this.pool.query(
-      `WITH atual AS (
+      `WITH exec_atual AS (
+           SELECT max(pipeline_run_id) AS run FROM anomalias
+            WHERE competencia_ano = $1 AND competencia_mes = $2),
+       exec_anterior AS (
+           SELECT max(pipeline_run_id) AS run FROM anomalias
+            WHERE competencia_ano = $3 AND competencia_mes = $4),
+       atual AS (
            SELECT conjunto_id FROM anomalias
-            WHERE pipeline_run_id = $1 AND competencia_ano = $2 AND competencia_mes = $3
-              AND ${alerta}),
+            WHERE competencia_ano = $1 AND competencia_mes = $2
+              AND pipeline_run_id = (SELECT run FROM exec_atual) AND ${alerta}),
        anterior AS (
            SELECT conjunto_id FROM anomalias
-            WHERE pipeline_run_id = $1 AND competencia_ano = $4 AND competencia_mes = $5
-              AND ${alerta})
+            WHERE competencia_ano = $3 AND competencia_mes = $4
+              AND pipeline_run_id = (SELECT run FROM exec_anterior) AND ${alerta})
        SELECT (SELECT count(*) FROM anterior)::int AS alertas_anterior,
               (SELECT count(*) FROM atual a
                 WHERE NOT EXISTS (SELECT 1 FROM anterior b WHERE b.conjunto_id = a.conjunto_id))::int AS entraram,
               (SELECT count(*) FROM anterior b
                 WHERE NOT EXISTS (SELECT 1 FROM atual a WHERE a.conjunto_id = b.conjunto_id))::int AS sairam`,
-      [runId, ano, mes, anoAnt, mesAnt],
+      [ano, mes, anoAnt, mesAnt],
     );
 
     // Piora de severidade: o conjunto já estava na fila e subiu de patamar.
     // Diz mais que "entrou na fila", porque a fila se renova quase inteira
     // todo mês.
     const { rows: pioraram } = await this.pool.query(
-      `SELECT a.conjunto_id::int AS conjunto_id, c.nome AS conjunto_nome,
+      `WITH exec_atual AS (
+           SELECT max(pipeline_run_id) AS run FROM anomalias
+            WHERE competencia_ano = $1 AND competencia_mes = $2),
+       exec_anterior AS (
+           SELECT max(pipeline_run_id) AS run FROM anomalias
+            WHERE competencia_ano = $3 AND competencia_mes = $4)
+       SELECT a.conjunto_id::int AS conjunto_id, c.nome AS conjunto_nome,
               a.distribuidora_cnpj::text AS cnpj, d.sigla,
               b.severidade AS de, a.severidade AS para,
               a.consumidores_afetados::text AS consumidores_afetados
          FROM anomalias a
          JOIN anomalias b
-           ON b.pipeline_run_id = a.pipeline_run_id AND b.conjunto_id = a.conjunto_id
-          AND b.competencia_ano = $4 AND b.competencia_mes = $5
+           ON b.conjunto_id = a.conjunto_id
+          AND b.competencia_ano = $3 AND b.competencia_mes = $4
+          AND b.pipeline_run_id = (SELECT run FROM exec_anterior)
          JOIN conjuntos c ON c.conjunto_id = a.conjunto_id
          JOIN distributors d ON d.cnpj = a.distribuidora_cnpj
-        WHERE a.pipeline_run_id = $1 AND a.competencia_ano = $2 AND a.competencia_mes = $3
+        WHERE a.competencia_ano = $1 AND a.competencia_mes = $2
+          AND a.pipeline_run_id = (SELECT run FROM exec_atual)
           AND a.severidade = 'alta' AND b.severidade = 'moderada'
         ORDER BY a.consumidores_afetados DESC NULLS LAST
         LIMIT 5`,
-      [runId, ano, mes, anoAnt, mesAnt],
+      [ano, mes, anoAnt, mesAnt],
     );
 
     return {
@@ -173,12 +189,12 @@ export class BoletimRepository {
    *  Reincidência é o que a comparação entre execuções revela e a fila
    *  sozinha não mostra. */
   async reincidentes(
-    runId: number,
     ano: number,
     mes: number,
     meses: number,
-  ): Promise<
-    Array<{
+  ): Promise<{
+    competencias_com_deteccao: number;
+    itens: Array<{
       conjunto_id: number;
       conjunto_nome: string | null;
       cnpj: string;
@@ -186,17 +202,38 @@ export class BoletimRepository {
       severidade: string;
       meses_seguidos: number;
       consumidores_afetados: string;
-    }>
-  > {
+    }>;
+  }> {
+    // Cada competência da janela é lida na execução mais recente que a
+    // detectou, e não numa execução fixa.
+    const janela = `
+      WITH janela AS (
+          SELECT generate_series(($1 * 12 + $2 - 1) - ($3 - 1), $1 * 12 + $2 - 1) AS idx),
+      execucoes AS (
+          SELECT competencia_ano, competencia_mes, max(pipeline_run_id) AS run
+            FROM anomalias
+           WHERE (competencia_ano * 12 + competencia_mes - 1) IN (SELECT idx FROM janela)
+           GROUP BY 1, 2),
+      detectadas AS (
+          SELECT a.* FROM anomalias a
+            JOIN execucoes e
+              ON e.competencia_ano = a.competencia_ano
+             AND e.competencia_mes = a.competencia_mes
+             AND e.run = a.pipeline_run_id)`;
+
+    // Quantas competências da janela realmente têm detecção. Sem isso, o
+    // consumidor não distingue "nenhum reincidente" de "não dá para saber".
+    const { rows: cobertura } = await this.pool.query<{ total: number }>(
+      `${janela} SELECT count(*)::int AS total FROM execucoes`,
+      [ano, mes, meses],
+    );
+
     const { rows } = await this.pool.query(
-      `WITH janela AS (
-           SELECT generate_series(($1 * 12 + $2 - 1) - ($3 - 1), $1 * 12 + $2 - 1) AS idx),
+      `${janela},
        presentes AS (
            SELECT conjunto_id, count(*)::int AS meses_seguidos
-             FROM anomalias
-            WHERE pipeline_run_id = $4
-              AND severidade IN ('alta','moderada')
-              AND (competencia_ano * 12 + competencia_mes - 1) IN (SELECT idx FROM janela)
+             FROM detectadas
+            WHERE severidade IN ('alta','moderada')
             GROUP BY 1
            HAVING count(*) = $3)
        SELECT a.conjunto_id::int AS conjunto_id, c.nome AS conjunto_nome,
@@ -204,14 +241,15 @@ export class BoletimRepository {
               p.meses_seguidos,
               a.consumidores_afetados::text AS consumidores_afetados
          FROM presentes p
-         JOIN anomalias a ON a.conjunto_id = p.conjunto_id
-          AND a.pipeline_run_id = $4 AND a.competencia_ano = $1 AND a.competencia_mes = $2
+         JOIN detectadas a ON a.conjunto_id = p.conjunto_id
+          AND a.competencia_ano = $1 AND a.competencia_mes = $2
          JOIN conjuntos c ON c.conjunto_id = a.conjunto_id
          JOIN distributors d ON d.cnpj = a.distribuidora_cnpj
         ORDER BY a.consumidores_afetados DESC NULLS LAST
         LIMIT 5`,
-      [ano, mes, meses, runId],
+      [ano, mes, meses],
     );
-    return rows;
+
+    return { competencias_com_deteccao: cobertura[0].total, itens: rows };
   }
 }

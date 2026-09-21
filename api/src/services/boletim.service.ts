@@ -63,11 +63,11 @@ export class BoletimService {
     const alertasAtuais =
       (porSeveridade.get('alta') ?? 0) + (porSeveridade.get('moderada') ?? 0);
 
-    const [delta, reincidentes] = await Promise.all([
+    const [delta, reincidencia] = await Promise.all([
       anterior
-        ? this.boletimRepo.delta(ctx.runId, ctx.ano, ctx.mes, anterior.ano, anterior.mes)
+        ? this.boletimRepo.delta(ctx.ano, ctx.mes, anterior.ano, anterior.mes)
         : Promise.resolve(null),
-      this.boletimRepo.reincidentes(ctx.runId, ctx.ano, ctx.mes, MESES_REINCIDENCIA),
+      this.boletimRepo.reincidentes(ctx.ano, ctx.mes, MESES_REINCIDENCIA),
     ]);
 
     return {
@@ -114,7 +114,9 @@ export class BoletimService {
           para: p.para as Severidade,
           consumidores_afetados: Number(p.consumidores_afetados),
         })),
-        reincidentes: reincidentes.map((r) => ({
+        reincidencia_meses: MESES_REINCIDENCIA,
+        reincidencia_competencias_com_deteccao: reincidencia.competencias_com_deteccao,
+        reincidentes: reincidencia.itens.map((r) => ({
           conjunto: { id: r.conjunto_id, nome: r.conjunto_nome },
           distribuidora: { sigla: r.sigla, cnpj: formatarCnpj(r.cnpj) },
           severidade: r.severidade as Severidade,

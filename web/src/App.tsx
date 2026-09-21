@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Sidebar } from '@/componentes/layout/Sidebar';
 import { BarraSuperior } from '@/componentes/layout/BarraSuperior';
 import { Pagina, EstadoErro } from '@/componentes/ui/Pagina';
+import { Boletim } from '@/telas/Boletim';
 import { api, ErroApi } from '@/lib/api';
 import { useRota } from '@/lib/rotas';
 import type { RespostaBoletim } from '@/tipos/api';
@@ -46,7 +47,7 @@ export default function App() {
             <EstadoErro mensagem={erro} />
           </Pagina>
         ) : (
-          <Conteudo rota={rota} />
+          <Conteudo rota={rota} competencia={competencia} />
         )}
 
         <footer className="px-9 pb-8 pt-4 text-xs text-muted-foreground">
@@ -59,7 +60,13 @@ export default function App() {
   );
 }
 
-function Conteudo({ rota }: { rota: ReturnType<typeof useRota> }) {
+function Conteudo({
+  rota,
+  competencia,
+}: {
+  rota: ReturnType<typeof useRota>;
+  competencia: string;
+}) {
   switch (rota.tela) {
     case 'fila':
       return <Pagina titulo="Fila de investigação" subtitulo="Em construção." children={null} />;
@@ -70,6 +77,6 @@ function Conteudo({ rota }: { rota: ReturnType<typeof useRota> }) {
         <Pagina titulo={`Conjunto ${rota.id}`} subtitulo="Em construção." children={null} />
       );
     default:
-      return <Pagina titulo="Boletim da carga" subtitulo="Em construção." children={null} />;
+      return <Boletim competencia={competencia} />;
   }
 }

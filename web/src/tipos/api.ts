@@ -157,6 +157,12 @@ export interface RespostaBoletim {
       para: Severidade;
       consumidores_afetados: number;
     }>;
+    /** Competências consecutivas exigidas para contar como reincidente. */
+    reincidencia_meses: number;
+    /** Quantas competências dessa janela têm detecção gravada. Menor que
+     *  `reincidencia_meses` significa que não dá para saber quem é
+     *  reincidente — diferente de não haver nenhum. */
+    reincidencia_competencias_com_deteccao: number;
     /** Na fila em competências consecutivas — o que a fila sozinha não mostra. */
     reincidentes: Array<{
       conjunto: ConjuntoResumo;

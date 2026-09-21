@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { AlertTriangle, Inbox } from 'lucide-react';
+import { AlertTriangle, HelpCircle, Inbox } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function Pagina({
@@ -50,14 +50,30 @@ export function EstadoErro({ mensagem }: { mensagem: string }) {
   );
 }
 
-export function EstadoVazio({ titulo, descricao }: { titulo: string; descricao?: string }) {
+/** Compacto de propósito: uma frase não justifica meia tela.
+ *
+ *  `motivo` separa as duas situações que não podem se confundir —
+ *  `vazio` é "não houve"; `indisponivel` é "não há como saber", que a tela
+ *  não pode apresentar como ausência de problema. */
+export function EstadoVazio({
+  titulo,
+  motivo = 'vazio',
+}: {
+  titulo: string;
+  motivo?: 'vazio' | 'indisponivel';
+}) {
+  const Icone = motivo === 'indisponivel' ? HelpCircle : Inbox;
   return (
-    <div className="mt-6 flex flex-col items-center rounded-lg border border-dashed px-6 py-12 text-center">
-      <Inbox className="size-7 text-muted-foreground" />
-      <p className="mt-3 text-[15px] font-semibold">{titulo}</p>
-      {descricao && (
-        <p className="mt-1 max-w-md text-sm text-muted-foreground">{descricao}</p>
+    <div
+      className={cn(
+        'flex items-center gap-2.5 rounded-lg border border-dashed px-4 py-3 text-sm',
+        motivo === 'indisponivel'
+          ? 'border-ausente-fg/30 bg-ausente-bg/60 text-ausente-fg'
+          : 'text-muted-foreground',
       )}
+    >
+      <Icone className="size-4 shrink-0" />
+      <span>{titulo}</span>
     </div>
   );
 }
