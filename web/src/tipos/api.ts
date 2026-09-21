@@ -206,6 +206,12 @@ export interface PontoSerie {
   eventos: number;
   consumidores_afetados: number;
   destoante: boolean;
+  /** Baseline do conjunto trazido para a escala **bruta** deste mês, isto é,
+   *  multiplicado pelo índice sazonal. O baseline é apurado na escala
+   *  dessazonalizada, então uma linha reta sobre a série de DEC bruto estaria
+   *  errada: em jul/2026 o fator é 0,687 e em jan é 1,576. */
+  baseline_mediana: number | null;
+  baseline_limite_alerta: number | null;
 }
 
 export interface CausaAgregada {

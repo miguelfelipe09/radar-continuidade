@@ -33,6 +33,22 @@ export class ConjuntoRepository {
     return rows[0] ?? null;
   }
 
+  /** Índice sazonal que a detecção usou nesta avaliação. Lido, não
+   *  recalculado: a regra mora na detecção e duplicá-la aqui criaria duas
+   *  implementações livres para divergir. */
+  async indiceSazonal(
+    runId: number,
+    ano: number,
+    mes: number,
+  ): Promise<Record<number, number>> {
+    const { rows } = await this.pool.query<{ mes: number; fator: number }>(
+      `SELECT mes, fator FROM indice_sazonal
+        WHERE pipeline_run_id = $1 AND competencia_ano = $2 AND competencia_mes = $3`,
+      [runId, ano, mes],
+    );
+    return Object.fromEntries(rows.map((r) => [r.mes, r.fator]));
+  }
+
   async serie(conjuntoId: number): Promise<LinhaSerie[]> {
     const { rows } = await this.pool.query<LinhaSerie>(
       `SELECT competencia_ano, competencia_mes, dec_aprox, fec_aprox,

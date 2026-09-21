@@ -32,7 +32,7 @@ export class ConjuntoService {
 
     const temAlimentador = ctx.ano >= PRIMEIRO_ANO_COM_ALIMENTADOR;
 
-    const [resumo, serie, mesmoMes, causas, alimentadores] = await Promise.all([
+    const [resumo, serie, mesmoMes, causas, alimentadores, indice] = await Promise.all([
       this.filaRepo.porConjunto(ctx.runId, ctx.ano, ctx.mes, conjuntoId),
       this.conjuntoRepo.serie(conjuntoId),
       this.conjuntoRepo.mesmoMes(conjuntoId, ctx.mes),
@@ -40,7 +40,18 @@ export class ConjuntoService {
       temAlimentador
         ? this.conjuntoRepo.alimentadores(conjuntoId, ctx.ano, ctx.mes)
         : Promise.resolve([]),
+      this.conjuntoRepo.indiceSazonal(ctx.runId, ctx.ano, ctx.mes),
     ]);
+
+    // O baseline é apurado na escala dessazonalizada. Para a série de DEC
+    // bruto, cada mês tem seu próprio limiar: o normalizado vezes o fator
+    // daquele mês. Desenhar uma reta seria errado nos dois sentidos.
+    const baseline = resumo ? {
+      mediana: resumo.baseline_mediana,
+      limite: resumo.limite_alerta,
+    } : null;
+    const naEscalaBruta = (valor: number | null, mes: number) =>
+      valor === null || baseline === null ? null : num(valor * (indice[mes] ?? 1));
 
     return {
       conjunto: { id: cabecalho.conjunto_id, nome: cabecalho.nome },
@@ -56,6 +67,8 @@ export class ConjuntoService {
         eventos: p.eventos,
         consumidores_afetados: Number(p.consumidores_afetados),
         destoante: p.destoante,
+        baseline_mediana: naEscalaBruta(baseline?.mediana ?? null, p.competencia_mes),
+        baseline_limite_alerta: naEscalaBruta(baseline?.limite ?? null, p.competencia_mes),
       })),
       mesmo_mes_anos_anteriores: mesmoMes.map((m) => ({
         competencia: rotulo(m.competencia_ano, ctx.mes),

@@ -306,6 +306,26 @@ DO UPDATE SET
 """
 
 
+GRAVAR_INDICE = """
+INSERT INTO indice_sazonal (pipeline_run_id, competencia_ano, competencia_mes, mes, fator)
+WITH anterior AS (
+    SELECT cc.dec_aprox, cc.competencia_mes
+      FROM conjunto_competencia cc
+     WHERE cc.cobertura_ok
+       AND cc.cobertura_distribuidora_ok
+       AND cc.dec_aprox IS NOT NULL
+       AND (cc.competencia_ano * 100 + cc.competencia_mes) < (%(ano)s * 100 + %(mes)s)
+)
+SELECT %(run_id)s, %(ano)s, %(mes)s, competencia_mes,
+       percentile_cont(0.5) WITHIN GROUP (ORDER BY dec_aprox)
+         / (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY dec_aprox) FROM anterior)
+  FROM anterior
+ GROUP BY competencia_mes
+ON CONFLICT (pipeline_run_id, competencia_ano, competencia_mes, mes)
+DO UPDATE SET fator = EXCLUDED.fator
+"""
+
+
 def competencia_mais_recente(conn: psycopg.Connection) -> tuple[int, int]:
     with conn.cursor() as cur:
         cur.execute("""
@@ -334,6 +354,11 @@ def detectar(conn: psycopg.Connection, run_id: int,
             "meses_encerrado": MESES_ENCERRADO,
             "concentracao_alta": CONCENTRACAO_ALTA,
         })
+
+        # O índice sazonal desta avaliação fica gravado: a API precisa dele
+        # para desenhar o limiar sobre a série de DEC bruto, e recomputá-lo
+        # do outro lado duplicaria a regra.
+        cur.execute(GRAVAR_INDICE, {"run_id": run_id, "ano": ano, "mes": mes})
 
         # Último envio de cada distribuidora, pré-calculado: o boletim lê
         # pronto em vez de varrer a agregação a cada chamada.

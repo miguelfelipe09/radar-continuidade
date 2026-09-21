@@ -4,6 +4,7 @@ import { BarraSuperior } from '@/componentes/layout/BarraSuperior';
 import { Pagina, EstadoErro } from '@/componentes/ui/Pagina';
 import { Boletim } from '@/telas/Boletim';
 import { Fila } from '@/telas/Fila';
+import { Conjunto } from '@/telas/Conjunto';
 import { api, ErroApi } from '@/lib/api';
 import { useRota } from '@/lib/rotas';
 import type { RespostaBoletim } from '@/tipos/api';
@@ -74,9 +75,7 @@ function Conteudo({
     case 'ranking':
       return <Pagina titulo="Ranking das piores" subtitulo="Em construção." children={null} />;
     case 'conjunto':
-      return (
-        <Pagina titulo={`Conjunto ${rota.id}`} subtitulo="Em construção." children={null} />
-      );
+      return <Conjunto id={rota.id} competencia={competencia} />;
     default:
       return <Boletim competencia={competencia} />;
   }

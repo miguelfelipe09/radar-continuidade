@@ -622,7 +622,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 1.43,
         "eventos": 1824,
         "consumidores_afetados": 86227,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 1.65,
+        "baseline_limite_alerta": 4.51
       },
       {
         "competencia": "2024-02",
@@ -632,7 +634,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.59,
         "eventos": 1078,
         "consumidores_afetados": 35726,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 1.35,
+        "baseline_limite_alerta": 3.68
       },
       {
         "competencia": "2024-03",
@@ -642,7 +646,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.95,
         "eventos": 963,
         "consumidores_afetados": 56956,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 1.23,
+        "baseline_limite_alerta": 3.37
       },
       {
         "competencia": "2024-04",
@@ -652,7 +658,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.19,
         "eventos": 477,
         "consumidores_afetados": 11172,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 0.95,
+        "baseline_limite_alerta": 2.59
       },
       {
         "competencia": "2024-05",
@@ -662,7 +670,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.4,
         "eventos": 738,
         "consumidores_afetados": 23733,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 0.84,
+        "baseline_limite_alerta": 2.3
       },
       {
         "competencia": "2024-06",
@@ -672,7 +682,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.26,
         "eventos": 470,
         "consumidores_afetados": 15790,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 0.75,
+        "baseline_limite_alerta": 2.04
       },
       {
         "competencia": "2024-07",
@@ -682,7 +694,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.2,
         "eventos": 429,
         "consumidores_afetados": 12255,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 0.72,
+        "baseline_limite_alerta": 1.97
       },
       {
         "competencia": "2024-08",
@@ -692,7 +706,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.8,
         "eventos": 739,
         "consumidores_afetados": 49910,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 0.77,
+        "baseline_limite_alerta": 2.12
       },
       {
         "competencia": "2024-09",
@@ -702,7 +718,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.44,
         "eventos": 728,
         "consumidores_afetados": 27765,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 1.03,
+        "baseline_limite_alerta": 2.81
       },
       {
         "competencia": "2024-10",
@@ -712,7 +730,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.58,
         "eventos": 885,
         "consumidores_afetados": 36619,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 1.31,
+        "baseline_limite_alerta": 3.58
       },
       {
         "competencia": "2024-11",
@@ -722,7 +742,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.83,
         "eventos": 753,
         "consumidores_afetados": 51866,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 1.08,
+        "baseline_limite_alerta": 2.94
       },
       {
         "competencia": "2024-12",
@@ -732,7 +754,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.67,
         "eventos": 849,
         "consumidores_afetados": 41607,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 1.52,
+        "baseline_limite_alerta": 4.16
       },
       {
         "competencia": "2025-01",
@@ -742,7 +766,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.85,
         "eventos": 1198,
         "consumidores_afetados": 53198,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 1.65,
+        "baseline_limite_alerta": 4.51
       },
       {
         "competencia": "2025-02",
@@ -752,7 +778,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.89,
         "eventos": 1034,
         "consumidores_afetados": 54909,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 1.35,
+        "baseline_limite_alerta": 3.68
       },
       {
         "competencia": "2025-03",
@@ -762,7 +790,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.64,
         "eventos": 805,
         "consumidores_afetados": 40709,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 1.23,
+        "baseline_limite_alerta": 3.37
       },
       {
         "competencia": "2025-04",
@@ -772,7 +802,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.71,
         "eventos": 837,
         "consumidores_afetados": 45561,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 0.95,
+        "baseline_limite_alerta": 2.59
       },
       {
         "competencia": "2025-05",
@@ -782,7 +814,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.25,
         "eventos": 533,
         "consumidores_afetados": 15739,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 0.84,
+        "baseline_limite_alerta": 2.3
       },
       {
         "competencia": "2025-06",
@@ -792,7 +826,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.32,
         "eventos": 491,
         "consumidores_afetados": 19965,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 0.75,
+        "baseline_limite_alerta": 2.04
       },
       {
         "competencia": "2025-07",
@@ -802,7 +838,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.3,
         "eventos": 536,
         "consumidores_afetados": 18965,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 0.72,
+        "baseline_limite_alerta": 1.97
       },
       {
         "competencia": "2025-08",
@@ -812,7 +850,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 1.19,
         "eventos": 668,
         "consumidores_afetados": 75731,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 0.77,
+        "baseline_limite_alerta": 2.12
       },
       {
         "competencia": "2025-09",
@@ -822,7 +862,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.61,
         "eventos": 663,
         "consumidores_afetados": 39998,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 1.03,
+        "baseline_limite_alerta": 2.81
       },
       {
         "competencia": "2025-10",
@@ -832,7 +874,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 1.06,
         "eventos": 729,
         "consumidores_afetados": 69333,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 1.31,
+        "baseline_limite_alerta": 3.58
       },
       {
         "competencia": "2025-11",
@@ -842,7 +886,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.38,
         "eventos": 682,
         "consumidores_afetados": 24698,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 1.08,
+        "baseline_limite_alerta": 2.94
       },
       {
         "competencia": "2025-12",
@@ -852,7 +898,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.53,
         "eventos": 1042,
         "consumidores_afetados": 35389,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 1.52,
+        "baseline_limite_alerta": 4.16
       },
       {
         "competencia": "2026-01",
@@ -862,7 +910,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 1.1,
         "eventos": 1194,
         "consumidores_afetados": 73704,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 1.65,
+        "baseline_limite_alerta": 4.51
       },
       {
         "competencia": "2026-03",
@@ -872,7 +922,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.34,
         "eventos": 656,
         "consumidores_afetados": 22508,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 1.23,
+        "baseline_limite_alerta": 3.37
       },
       {
         "competencia": "2026-04",
@@ -882,7 +934,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.17,
         "eventos": 531,
         "consumidores_afetados": 11432,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 0.95,
+        "baseline_limite_alerta": 2.59
       },
       {
         "competencia": "2026-05",
@@ -892,7 +946,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.18,
         "eventos": 488,
         "consumidores_afetados": 12305,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 0.84,
+        "baseline_limite_alerta": 2.3
       },
       {
         "competencia": "2026-06",
@@ -902,7 +958,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 0.28,
         "eventos": 626,
         "consumidores_afetados": 18614,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 0.75,
+        "baseline_limite_alerta": 2.04
       },
       {
         "competencia": "2026-07",
@@ -912,7 +970,9 @@ export const exemplos: Record<string, unknown> = {
         "fec_aprox": 3.81,
         "eventos": 1237,
         "consumidores_afetados": 253948,
-        "destoante": false
+        "destoante": false,
+        "baseline_mediana": 0.72,
+        "baseline_limite_alerta": 1.97
       }
     ],
     "mesmo_mes_anos_anteriores": [
