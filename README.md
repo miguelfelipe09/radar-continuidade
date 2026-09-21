@@ -522,6 +522,13 @@ Melhorias avaliadas e conscientemente adiadas:
   significativa. Não foi adotada por exigir revalidação completa da fila.
 - **Suporte a versões anteriores do layout** (2017 a 2023). O ETL já tem a
   estrutura de adaptadores; faltaria apenas mapear o período.
+- **Duração mediana contra o histórico do conjunto.** Hoje a fila distingue
+  alerta espalhado de alerta apoiado em poucos registros (o sinal de
+  concentração), mas não distingue **muitos eventos curtos** de **poucos
+  eventos longos** — que são problemas operacionais diferentes: o primeiro
+  sugere rede instável com religamento rápido, o segundo sugere dificuldade de
+  restabelecimento. Comparar a duração mediana do mês com a do próprio
+  histórico separaria os dois casos.
 - **Alertas por e-mail ou webhook** quando uma nova carga detecta anomalias.
 
 ---

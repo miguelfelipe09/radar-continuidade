@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Shuffle, Users, WifiOff } from 'lucide-react';
+import { ChevronDown, ChevronRight, Layers, Shuffle, Users, WifiOff } from 'lucide-react';
 import type { ItemFila } from '@/tipos/api';
 import { Badge, Chip } from '@/componentes/ui/Estado';
 import { decimal, inteiro, plural, porcentagem } from '@/lib/formato';
@@ -14,29 +14,47 @@ const BARRA: Record<string, string> = {
   ausente: 'bg-ausente-fg',
 };
 
+/** Dica em balão, não `title` do navegador: o nativo demora a aparecer e some
+ *  na primeira captura de tela. */
+function Dica({ texto, children }: { texto: string; children: React.ReactNode }) {
+  return (
+    <span className="group/dica relative inline-flex">
+      <span className="text-muted-foreground">{children}</span>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute bottom-full right-0 z-20 mb-1.5 hidden w-60 rounded-md bg-foreground px-2.5 py-2 text-[12px] font-medium leading-snug text-background shadow-lg group-hover/dica:block"
+      >
+        {texto}
+      </span>
+    </span>
+  );
+}
+
 /** Sinais de contexto: discretos por definição — qualificam a linha sem
  *  disputar atenção com a severidade. */
 function Sinais({ item }: { item: ItemFila }) {
-  const { reconfiguracao, baseline_esburacado, buracos_envio } = item.contexto;
-  if (!reconfiguracao && !baseline_esburacado) return null;
+  const { reconfiguracao, baseline_esburacado, buracos_envio, concentrado } =
+    item.contexto;
+  if (!reconfiguracao && !baseline_esburacado && !concentrado) return null;
 
   return (
     <span className="flex items-center gap-1.5">
+      {concentrado && (
+        <Dica texto="Mais de 70% do consumidor-hora do mês vem dos 5 maiores eventos: o indicador está apoiado em poucos registros. Vale olhá-los antes de concluir algo sobre a rede.">
+          <Layers className="size-3.5" />
+        </Dica>
+      )}
       {reconfiguracao && (
-        <span
-          title="O conjunto foi redesenhado no período: mudança administrativa, não anomalia operacional."
-          className="text-muted-foreground"
-        >
+        <Dica texto="O conjunto foi redesenhado no período. Mudança administrativa não é anomalia operacional.">
           <Shuffle className="size-3.5" />
-        </span>
+        </Dica>
       )}
       {baseline_esburacado && (
-        <span
-          title={`Baseline com ${buracos_envio} ${plural(buracos_envio, 'mês', 'meses')} de falha de envio da distribuidora.`}
-          className="text-muted-foreground"
+        <Dica
+          texto={`O baseline deste conjunto tem ${buracos_envio} ${plural(buracos_envio, 'mês', 'meses')} em que a distribuidora falhou no envio. Ausência de envio não é ausência de interrupção.`}
         >
           <WifiOff className="size-3.5" />
-        </span>
+        </Dica>
       )}
     </span>
   );
@@ -102,14 +120,21 @@ function Linha({ item }: { item: ItemFila }) {
 /** Evento regional: a frota inteira alertando junto não são N problemas de
  *  rede, é um evento. Vira um bloco só, com a conta à vista, em vez de
  *  ocupar a fila com 90 linhas soltas. */
+export interface ResumoGrupo {
+  total: number;
+  altas: number;
+  moderadas: number;
+  afetados: number;
+}
+
 function GrupoEvento({
   itens,
-  total,
+  resumo,
   aberto,
   alternar,
 }: {
   itens: ItemFila[];
-  total: number | null;
+  resumo: ResumoGrupo | null;
   aberto: boolean;
   alternar: () => void;
 }) {
@@ -139,17 +164,25 @@ function GrupoEvento({
             <Chip estado="alta" className="px-2 py-1 text-[12px]">
               evento regional
             </Chip>
+            {/* A composição importa: sem ela, o grupo fechado esconde os
+                alertas altos atrás de uma primeira linha moderada. */}
             <span className="text-[13px] text-muted-foreground">
-              {total === null ? (
-                <>
-                  {inteiro(itens.length)} nesta página
-                </>
+              {resumo === null ? (
+                <>{inteiro(itens.length)} nesta página</>
               ) : (
                 <>
-                  <b className="font-semibold text-secondary-foreground numerico">
-                    {inteiro(total)}
+                  <b className="font-semibold text-alta-fg numerico">
+                    {inteiro(resumo.altas)}
                   </b>{' '}
-                  {plural(total, 'conjunto na fila', 'conjuntos na fila')}
+                  {plural(resumo.altas, 'alta', 'altas')} ·{' '}
+                  <b className="font-semibold text-moderada-fg numerico">
+                    {inteiro(resumo.moderadas)}
+                  </b>{' '}
+                  {plural(resumo.moderadas, 'moderada', 'moderadas')} ·{' '}
+                  <b className="font-semibold text-secondary-foreground numerico">
+                    {inteiro(resumo.afetados)}
+                  </b>{' '}
+                  afetados
                 </>
               )}{' '}
               · {porcentagem(saturacao_frota)} de{' '}
@@ -180,12 +213,12 @@ const CABECALHO =
 
 export function TabelaFila({
   itens,
-  totaisPorDistribuidora,
+  resumosPorDistribuidora,
 }: {
   itens: ItemFila[];
-  /** Total de alertas da distribuidora na competência, para o cabeçalho do
+  /** Composição da distribuidora na competência inteira, para o cabeçalho do
    *  grupo não afirmar só o que está na página. */
-  totaisPorDistribuidora: Record<string, number>;
+  resumosPorDistribuidora: Record<string, ResumoGrupo>;
 }) {
   const [abertos, setAbertos] = useState<Record<string, boolean>>({});
 
@@ -250,7 +283,7 @@ export function TabelaFila({
               <GrupoEvento
                 key={bloco.cnpj}
                 itens={bloco.itens}
-                total={totaisPorDistribuidora[bloco.cnpj] ?? null}
+                resumo={resumosPorDistribuidora[bloco.cnpj] ?? null}
                 aberto={abertos[bloco.cnpj] ?? false}
                 alternar={() =>
                   setAbertos((a) => ({ ...a, [bloco.cnpj]: !a[bloco.cnpj] }))

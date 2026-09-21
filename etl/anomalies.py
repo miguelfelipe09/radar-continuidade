@@ -30,6 +30,11 @@ RAZAO_QUEDA = 0.25
 # normalmente, é código de conjunto aposentado — não mês sem interrupção.
 # Um mês de falta é plausível e dois ainda são; três não.
 MESES_ENCERRADO = 3
+# Acima desta fração do consumidor-hora vinda dos 5 maiores eventos, o
+# indicador está apoiado em meia dúzia de registros. Medido em 07/2026: a
+# mediana da concentração é 0,43, então 0,5 acenderia em 131 dos 358 alertas
+# — mais de um terço da fila, o que é decoração, não sinal. Em 0,7 são 58.
+CONCENTRACAO_ALTA = 0.7
 
 DETECTAR = """
 INSERT INTO anomalias (
@@ -38,7 +43,8 @@ INSERT INTO anomalias (
     dec_aprox, dec_normalizado, consumidores_afetados,
     consumidores_ativos, eventos, baseline_pontos, buracos_envio, buracos_conjunto,
     baseline_mediana, baseline_q1, baseline_q3, baseline_iqr, limite_alerta,
-    desvio_iqr, severidade, reconfiguracao, baseline_esburacado, saturacao_frota
+    desvio_iqr, severidade, reconfiguracao, baseline_esburacado, saturacao_frota,
+    concentrado
 )
 WITH alvo AS (
     SELECT %(ano)s::smallint AS ano, %(mes)s::smallint AS mes
@@ -179,6 +185,7 @@ avaliacao AS (
         o.consumidores_ativos, o.eventos,
         b.pontos, b.mediana, b.q1, b.q3, b.q3 - b.q1 AS iqr,
         bu.buracos_envio, bu.buracos_conjunto,
+        o.concentracao_top5,
         NULL::smallint AS ultimo_registro_ano,
         NULL::smallint AS ultimo_registro_mes,
         CASE WHEN o.conjunto_id = 0            THEN 'conjunto_invalido'
@@ -208,6 +215,7 @@ avaliacao AS (
         NULL, NULL, NULL, NULL, NULL,
         b.pontos, b.mediana, b.q1, b.q3, b.q3 - b.q1,
         bu.buracos_envio, bu.buracos_conjunto,
+        NULL::double precision,
         au.ultimo_ano, au.ultimo_mes,
         'ausente', au.motivo,
         EXISTS (
@@ -266,7 +274,8 @@ SELECT
     count(*) FILTER (WHERE severidade IN ('alta', 'moderada'))
         OVER (PARTITION BY distribuidora_cnpj)::double precision
     / nullif(count(*) FILTER (WHERE situacao = 'avaliado')
-        OVER (PARTITION BY distribuidora_cnpj), 0) AS saturacao_frota
+        OVER (PARTITION BY distribuidora_cnpj), 0) AS saturacao_frota,
+    concentracao_top5 >= %(concentracao_alta)s AS concentrado
 FROM classificado
 ON CONFLICT (pipeline_run_id, conjunto_id, competencia_ano, competencia_mes)
 DO UPDATE SET
@@ -283,6 +292,7 @@ DO UPDATE SET
     buracos_envio           = EXCLUDED.buracos_envio,
     buracos_conjunto        = EXCLUDED.buracos_conjunto,
     saturacao_frota         = EXCLUDED.saturacao_frota,
+    concentrado             = EXCLUDED.concentrado,
     baseline_mediana        = EXCLUDED.baseline_mediana,
     baseline_q1             = EXCLUDED.baseline_q1,
     baseline_q3             = EXCLUDED.baseline_q3,
@@ -322,6 +332,7 @@ def detectar(conn: psycopg.Connection, run_id: int,
             "minimo_ativos": MINIMO_ATIVOS,
             "razao_queda": RAZAO_QUEDA,
             "meses_encerrado": MESES_ENCERRADO,
+            "concentracao_alta": CONCENTRACAO_ALTA,
         })
 
         # Último envio de cada distribuidora, pré-calculado: o boletim lê

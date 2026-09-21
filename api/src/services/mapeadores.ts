@@ -1,7 +1,7 @@
 /** Tradução de linha do banco para DTO. Sem Express, sem SQL. */
 
 import { config } from '../config';
-import { formatarCnpj, rotulo } from '../middlewares/validacao';
+import { competenciaLegivel, formatarCnpj, rotulo } from '../middlewares/validacao';
 import { LinhaFila } from '../repositories/fila.repository';
 import { Competencia, ItemFila, MotivoAusencia, Severidade, Situacao } from '../models';
 
@@ -28,12 +28,12 @@ export function inteiro(valor: number | string | null): number | null {
 function observacaoAusencia(linha: LinhaFila): string {
   const ultimoRegistro =
     linha.ultimo_registro_ano && linha.ultimo_registro_mes
-      ? rotulo(linha.ultimo_registro_ano, linha.ultimo_registro_mes)
+      ? competenciaLegivel(linha.ultimo_registro_ano, linha.ultimo_registro_mes)
       : null;
 
   if (linha.motivo_ausencia === 'distribuidora_ausente') {
     const desde = linha.ultimo_envio_ano
-      ? rotulo(linha.ultimo_envio_ano, linha.ultimo_envio_mes!)
+      ? competenciaLegivel(linha.ultimo_envio_ano, linha.ultimo_envio_mes!)
       : ultimoRegistro;
     return desde
       ? `A distribuidora não envia dados desde ${desde}. Ausência de envio, não de interrupções.`
@@ -89,6 +89,7 @@ export function itemFila(linha: LinhaFila): ItemFila {
       evento_regional:
         (saturacao ?? 0) >= config.limiarEventoRegional &&
         linha.frota_avaliada >= config.minimoFrotaEventoRegional,
+      concentrado: linha.concentrado ?? false,
     },
   };
 

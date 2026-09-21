@@ -11,7 +11,7 @@ import {
   TituloSecao,
 } from '@/componentes/ui/Pagina';
 import { Filtros, type Distribuidora } from '@/componentes/fila/Filtros';
-import { TabelaFila } from '@/componentes/fila/TabelaFila';
+import { TabelaFila, type ResumoGrupo } from '@/componentes/fila/TabelaFila';
 import { TabelaAusentes } from '@/componentes/fila/TabelaAusentes';
 
 const TAMANHO_PAGINA = 50;
@@ -25,7 +25,7 @@ export function Fila({ competencia }: { competencia: string }) {
   const [total, setTotal] = useState(0);
   const [ausentes, setAusentes] = useState<ItemFila[]>([]);
   const [distribuidoras, setDistribuidoras] = useState<Distribuidora[]>([]);
-  const [totaisEvento, setTotaisEvento] = useState<Record<string, number>>({});
+  const [resumosEvento, setResumosEvento] = useState<Record<string, ResumoGrupo>>({});
   const [erro, setErro] = useState<string | null>(null);
 
   // A lista de distribuidoras vem do ranking, que é a única rota que devolve
@@ -75,8 +75,9 @@ export function Fila({ competencia }: { competencia: string }) {
         setTotal(alertas.total);
         setAusentes(semDado.itens ?? []);
 
-        // O cabeçalho do grupo precisa do total da distribuidora na
-        // competência, não só do que coube nesta página.
+        // O cabeçalho do grupo descreve a distribuidora na competência
+        // inteira, não o que coube nesta página: composição de severidade e
+        // total de afetados vêm de uma consulta própria por distribuidora.
         const cnpjsEvento = [
           ...new Set(
             (alertas.itens ?? [])
@@ -84,19 +85,25 @@ export function Fila({ competencia }: { competencia: string }) {
               .map((i) => i.distribuidora.cnpj),
           ),
         ];
-        const totais: Record<string, number> = {};
+        const resumos: Record<string, ResumoGrupo> = {};
         await Promise.all(
           cnpjsEvento.map(async (c) => {
             const r = await api.fila({
               competencia,
               severidade: severidades.join(','),
               distribuidora: c,
-              tamanho: 1,
+              tamanho: 200,
             });
-            totais[c] = r.total;
+            const linhas = r.itens ?? [];
+            resumos[c] = {
+              total: r.total,
+              altas: linhas.filter((i) => i.severidade === 'alta').length,
+              moderadas: linhas.filter((i) => i.severidade === 'moderada').length,
+              afetados: linhas.reduce((soma, i) => soma + (i.consumidores_afetados ?? 0), 0),
+            };
           }),
         );
-        if (ativo) setTotaisEvento(totais);
+        if (ativo) setResumosEvento(resumos);
       })
       .catch((e: ErroApi) => ativo && setErro(e.message));
 
@@ -162,7 +169,7 @@ export function Fila({ competencia }: { competencia: string }) {
             <EstadoVazio titulo="Nenhum conjunto na fila com os filtros atuais." />
           ) : (
             <>
-              <TabelaFila itens={itens} totaisPorDistribuidora={totaisEvento} />
+              <TabelaFila itens={itens} resumosPorDistribuidora={resumosEvento} />
               {ultimaPagina > 1 && (
                 <div className="mt-4 flex items-center justify-between text-[13px]">
                   <span className="text-muted-foreground">

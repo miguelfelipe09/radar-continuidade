@@ -734,6 +734,61 @@ de conjunto provavelmente foi aposentado".
 > aposentado no mês em que ele falta pela primeira vez. Em 06/2026 a regra
 > separa corretamente 2 casos genuínos de mês isolado dos 85 encerrados.
 
+### Os maiores desvios não vêm de registros longos
+
+Os dois maiores desvios de 07/2026 — Jaboticabal 2 (#16444, DEC 47,38, 182,8
+IQR) e Ribeirão Preto 4 (#13970, DEC 21,76, 156,9 IQR), ambos da
+CPFL-Paulista — levantaram a suspeita de estarem apoiados em interrupções
+acima de 7 dias, aquelas que a §9 manda manter e contar. **A suspeita não se
+confirmou:**
+
+```
+#13970   490 eventos   0 acima de 7 dias   máx 3,5 dias
+#16444   921 eventos   1 acima de 7 dias   máx 7,6 dias
+         o único registro longo vale 546 de 1.361.787 consumidor-hora = 0,04%
+```
+
+Também não é volume de eventos. O #16444 teve **mais** eventos em janeiro
+(1.072) com DEC 0,60, contra 921 em julho com DEC 47,38 — 79 vezes maior. E a
+concentração é baixa: o maior evento é 6% do consumidor-hora e os 20 maiores
+somam 42%.
+
+O que muda é o **perfil de cada evento**:
+
+| Conjunto | Mês | Eventos | Duração mediana | Duração média | Afetados por evento |
+|---|---|---|---|---|---|
+| #16444 | jan | 1.072 | 147 min | 288 min | 6 |
+| #16444 | jun | 212 | 174 min | 218 min | 31 |
+| #16444 | **jul** | 921 | **342 min** | **1.264 min** | **101** |
+| #13970 | jan | 289 | 94 min | 141 min | 16 |
+| #13970 | **jul** | 490 | **364 min** | **751 min** | **154** |
+
+A duração mediana dobra, a média sextuplica e o público por evento multiplica
+por 17. Não é registro suspeito: é um mês inteiro em que cada interrupção
+durou mais e atingiu mais gente — perfil de evento climático severo,
+consistente com o que a mesma competência mostra no Rio (§14, saturação de
+frota).
+
+**Decisão:** o sinal na fila não é "contém interrupção acima de 7 dias", que
+aqui não pegaria nada de útil, e sim **concentração**: quanto do
+consumidor-hora vem dos 5 maiores eventos. É a medida que responde à pergunta
+original — o alerta está apoiado em poucos registros?
+
+O limiar é **0,7**, não 0,5. A concentração mediana da fila de 07/2026 é
+**0,43**, então metade é o comportamento típico:
+
+```
+>= 0,5  →  131 dos 358 alertas  (37% da fila)
+>= 0,6  →   88                  (25%)
+>= 0,7  →   58                  (16%)
+>= 0,8  →   33                  ( 9%)
+>= 0,9  →   19                  ( 5%)
+```
+
+Em 0,7 o sinal acende em 58 alertas e **não** acende nos dois conjuntos
+investigados (0,242 e 0,180), que é o comportamento correto: neles o desvio
+é real e espalhado, não artefato de meia dúzia de registros.
+
 ### Queda: Tukey para baixo é inalcançável
 
 A classificação de queda usava a cerca de Tukey (`q1 − 1,5·IQR`), simétrica à

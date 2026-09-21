@@ -15,9 +15,25 @@ INSERT INTO conjunto_competencia (
     conjunto_id, distribuidora_cnpj, competencia_ano, competencia_mes,
     eventos, consumidores_afetados, consumidor_horas,
     consumidores_ativos, destoante, dec_aprox, fec_aprox, cobertura_ok,
-    cobertura_distribuidora_ok, atualizado_em
+    cobertura_distribuidora_ok, concentracao_top5, atualizado_em
 )
-WITH agregado AS (
+WITH concentracao AS (
+    -- Quanto do consumidor-hora vem dos 5 eventos de maior impacto. Alta
+    -- concentração indica indicador apoiado em meia dúzia de registros.
+    SELECT conjunto_id, competencia_ano, competencia_mes,
+           sum(ch) FILTER (WHERE posicao <= 5) / nullif(sum(ch), 0) AS top5
+      FROM (
+        SELECT conjunto_id, competencia_ano, competencia_mes,
+               consumidores_afetados::double precision * duracao_minutos / 60.0 AS ch,
+               row_number() OVER (
+                   PARTITION BY conjunto_id, competencia_ano, competencia_mes
+                   ORDER BY consumidores_afetados::double precision * duracao_minutos DESC
+               ) AS posicao
+          FROM interrupcoes
+      ) e
+     GROUP BY 1, 2, 3
+),
+agregado AS (
     -- Sem filtro de expurgo, de propósito (ACHADOS §6): 2024-2025 não têm
     -- expurgo identificável, e filtrar só 2026 faria o ano recente parecer
     -- artificialmente melhor.
@@ -79,6 +95,7 @@ SELECT
          THEN a.consumidores_afetados::double precision / ca.consumidores_ativos END AS fec_aprox,
     cf.cobertura_ok,
     cdf.cobertura_distribuidora_ok,
+    con.top5,
     now()
 FROM agregado a
 JOIN conjuntos c USING (conjunto_id)
@@ -87,6 +104,10 @@ JOIN cobertura_dist_flag cdf
   ON cdf.distribuidora_cnpj = c.distribuidora_cnpj
  AND cdf.competencia_ano    = a.competencia_ano
  AND cdf.competencia_mes    = a.competencia_mes
+LEFT JOIN concentracao con
+       ON con.conjunto_id     = a.conjunto_id
+      AND con.competencia_ano = a.competencia_ano
+      AND con.competencia_mes = a.competencia_mes
 LEFT JOIN conjunto_consumidores_ativos ca
        ON ca.conjunto_id     = a.conjunto_id
       AND ca.competencia_ano = a.competencia_ano
@@ -102,6 +123,7 @@ ON CONFLICT (conjunto_id, competencia_ano, competencia_mes) DO UPDATE SET
     fec_aprox             = EXCLUDED.fec_aprox,
     cobertura_ok          = EXCLUDED.cobertura_ok,
     cobertura_distribuidora_ok = EXCLUDED.cobertura_distribuidora_ok,
+    concentracao_top5     = EXCLUDED.concentracao_top5,
     atualizado_em         = EXCLUDED.atualizado_em
 """
 

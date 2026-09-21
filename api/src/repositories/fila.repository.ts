@@ -28,6 +28,7 @@ export interface LinhaFila {
   buracos_envio: number | null;
   buracos_conjunto: number | null;
   saturacao_frota: number | null;
+  concentrado: boolean | null;
   frota_avaliada: number;
   ultimo_envio_ano: number | null;
   ultimo_envio_mes: number | null;
@@ -69,6 +70,7 @@ const COLUNAS = `
     a.buracos_envio,
     a.buracos_conjunto,
     a.saturacao_frota,
+    a.concentrado,
     coalesce(f.avaliados, 0)      AS frota_avaliada,
     d.ultimo_envio_ano,
     d.ultimo_envio_mes`;

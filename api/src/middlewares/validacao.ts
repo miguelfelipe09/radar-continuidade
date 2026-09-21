@@ -35,6 +35,17 @@ export function rotulo(ano: number, mes: number): string {
   return `${ano}-${String(mes).padStart(2, '0')}`;
 }
 
+const MESES = [
+  'jan', 'fev', 'mar', 'abr', 'mai', 'jun',
+  'jul', 'ago', 'set', 'out', 'nov', 'dez',
+];
+
+/** "mar/2026". Usado nas frases que a API escreve prontas para leitura —
+ *  o formato AAAA-MM é de máquina e não deve aparecer em texto corrido. */
+export function competenciaLegivel(ano: number, mes: number): string {
+  return `${MESES[mes - 1] ?? mes}/${ano}`;
+}
+
 export function inteiro(
   valor: unknown,
   nome: string,

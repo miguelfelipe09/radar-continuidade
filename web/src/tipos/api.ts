@@ -62,6 +62,10 @@ export interface ContextoItem {
    *  a saturação significar algo. Uma distribuidora de um conjunto satura em
    *  100% com um único alerta. */
   evento_regional: boolean;
+  /** Mais de 70% do consumidor-hora do mês vem dos 5 maiores eventos: o
+   *  indicador está apoiado em meia dúzia de registros, que convém olhar
+   *  antes de concluir algo sobre a rede. */
+  concentrado: boolean;
 }
 
 export interface ItemFila {

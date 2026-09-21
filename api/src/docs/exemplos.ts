@@ -250,7 +250,8 @@ export const exemplos: Record<string, unknown> = {
             "buracos_conjunto": 0,
             "saturacao_frota": 0.113,
             "frota_avaliada": 115,
-            "evento_regional": false
+            "evento_regional": false,
+            "concentrado": false
           }
         },
         {
@@ -283,7 +284,8 @@ export const exemplos: Record<string, unknown> = {
             "buracos_conjunto": 0,
             "saturacao_frota": 0.5,
             "frota_avaliada": 78,
-            "evento_regional": true
+            "evento_regional": true,
+            "concentrado": false
           }
         },
         {
@@ -316,7 +318,8 @@ export const exemplos: Record<string, unknown> = {
             "buracos_conjunto": 0,
             "saturacao_frota": 0.8257,
             "frota_avaliada": 109,
-            "evento_regional": true
+            "evento_regional": true,
+            "concentrado": false
           }
         }
       ]
@@ -438,7 +441,8 @@ export const exemplos: Record<string, unknown> = {
           "buracos_conjunto": 0,
           "saturacao_frota": 0.113,
           "frota_avaliada": 115,
-          "evento_regional": false
+          "evento_regional": false,
+          "concentrado": false
         }
       },
       {
@@ -471,7 +475,8 @@ export const exemplos: Record<string, unknown> = {
           "buracos_conjunto": 0,
           "saturacao_frota": 0.5,
           "frota_avaliada": 78,
-          "evento_regional": true
+          "evento_regional": true,
+          "concentrado": false
         }
       }
     ]
@@ -516,10 +521,11 @@ export const exemplos: Record<string, unknown> = {
           "buracos_conjunto": 6,
           "saturacao_frota": null,
           "frota_avaliada": 0,
-          "evento_regional": false
+          "evento_regional": false,
+          "concentrado": false
         },
         "motivo_ausencia": "conjunto_encerrado",
-        "observacao": "Sem registros desde 2025-12. O código de conjunto provavelmente foi aposentado."
+        "observacao": "Sem registros desde dez/2025. O código de conjunto provavelmente foi aposentado."
       },
       {
         "conjunto": {
@@ -551,10 +557,11 @@ export const exemplos: Record<string, unknown> = {
           "buracos_conjunto": 6,
           "saturacao_frota": null,
           "frota_avaliada": 0,
-          "evento_regional": false
+          "evento_regional": false,
+          "concentrado": false
         },
         "motivo_ausencia": "conjunto_encerrado",
-        "observacao": "Sem registros desde 2025-12. O código de conjunto provavelmente foi aposentado."
+        "observacao": "Sem registros desde dez/2025. O código de conjunto provavelmente foi aposentado."
       }
     ]
   },
@@ -602,7 +609,8 @@ export const exemplos: Record<string, unknown> = {
         "buracos_conjunto": 0,
         "saturacao_frota": 0.8257,
         "frota_avaliada": 109,
-        "evento_regional": true
+        "evento_regional": true,
+        "concentrado": false
       }
     },
     "serie": [
