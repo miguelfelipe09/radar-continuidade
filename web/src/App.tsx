@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Sidebar } from '@/componentes/layout/Sidebar';
 import { BarraSuperior } from '@/componentes/layout/BarraSuperior';
-import { Pagina, EstadoErro } from '@/componentes/ui/Pagina';
+import { Pagina, EstadoErro, EstadoVazio } from '@/componentes/ui/Pagina';
 import { Boletim } from '@/telas/Boletim';
 import { Fila } from '@/telas/Fila';
 import { Conjunto } from '@/telas/Conjunto';
@@ -10,19 +10,34 @@ import { api, ErroApi } from '@/lib/api';
 import { useRota } from '@/lib/rotas';
 import type { RespostaBoletim } from '@/tipos/api';
 
-/** O arquivo de 2026 vai até julho; a API aceita qualquer competência que
- *  tenha detecção gravada. */
-const COMPETENCIAS = [
-  '2026-07', '2026-06', '2026-05', '2026-04', '2026-03', '2026-02', '2026-01',
-];
-
 export default function App() {
   const rota = useRota();
-  const [competencia, setCompetencia] = useState(COMPETENCIAS[0]);
+  // A lista vem da API, e não de uma constante: só entra no seletor a
+  // competência que tem detecção gravada. Uma lista fixa oferecia meses que
+  // numa instalação limpa não existiam, e escolhê-los dava erro.
+  const [competencias, setCompetencias] = useState<string[] | null>(null);
+  const [competencia, setCompetencia] = useState<string | null>(null);
   const [boletim, setBoletim] = useState<RespostaBoletim | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
+    let ativo = true;
+    api
+      .competencias()
+      .then((r) => {
+        if (!ativo) return;
+        const rotulos = r.competencias.map((c) => c.rotulo);
+        setCompetencias(rotulos);
+        setCompetencia((atual) => atual ?? rotulos[0] ?? null);
+      })
+      .catch((e: ErroApi) => ativo && setErro(e.message));
+    return () => {
+      ativo = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!competencia) return;
     let ativo = true;
     setErro(null);
     api
@@ -40,7 +55,7 @@ export default function App() {
       <main className="min-w-0 flex-1">
         <BarraSuperior
           boletim={boletim}
-          competencias={COMPETENCIAS}
+          competencias={competencias ?? []}
           selecionada={competencia}
           aoSelecionar={setCompetencia}
         />
@@ -49,9 +64,13 @@ export default function App() {
           <Pagina titulo="Radar de Continuidade">
             <EstadoErro mensagem={erro} />
           </Pagina>
-        ) : (
+        ) : competencias !== null && competencias.length === 0 ? (
+          <Pagina titulo="Radar de Continuidade">
+            <EstadoVazio titulo="Nenhuma competência detectada ainda. Rode a ingestão: python -m etl ingest --ano 2024 --ano 2025 --ano 2026" />
+          </Pagina>
+        ) : competencia ? (
           <Conteudo rota={rota} competencia={competencia} />
-        )}
+        ) : null}
 
         <footer className="px-9 pb-8 pt-4 text-xs text-muted-foreground">
           Os indicadores são aproximações reconstruídas do dado bruto da ANEEL —

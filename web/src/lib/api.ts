@@ -2,6 +2,7 @@
 
 import type {
   RespostaBoletim,
+  RespostaCompetencias,
   RespostaConjunto,
   RespostaFila,
   RespostaRanking,
@@ -60,6 +61,8 @@ export interface FiltrosFila {
 }
 
 export const api = {
+  competencias: () => buscar<RespostaCompetencias>('/competencias'),
+
   boletim: (competencia?: string) =>
     buscar<RespostaBoletim>('/boletim', { competencia }),
 
