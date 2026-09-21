@@ -634,8 +634,4 @@ radar-continuidade/
 
 ## Sobre o desenvolvimento
 
-Este projeto foi desenvolvido com assistência de IA (Claude), usada para
-exploração dos dados, escrita de código e revisão. Todas as decisões de
-modelagem, os limiares estatísticos e os recortes de produto foram tomados e
-verificados por mim — cada número citado aqui e no `ACHADOS.md` veio de uma
-consulta que rodou sobre a base real.
+Este projeto foi desenvolvido com assistência de IA (Claude), usada para exploração dos dados, escrita de código e revisão. As propostas de modelagem e os limiares estatísticos foram discutidos com a IA; a escolha final e a exigência de medição antes de adotar cada regra foram minhas. Cada número citado aqui e no ACHADOS.md veio de uma consulta que rodou sobre a base real.
