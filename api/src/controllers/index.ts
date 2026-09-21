@@ -5,11 +5,20 @@ import { Request, Response } from 'express';
 import { erroRequisicao } from '../middlewares/erro';
 import * as v from '../middlewares/validacao';
 import { BoletimService } from '../services/boletim.service';
+import { CompetenciasService } from '../services/competencias.service';
 import { ConjuntoService } from '../services/conjunto.service';
 import { FilaService } from '../services/fila.service';
 import { OrdemRanking, RankingService } from '../services/ranking.service';
 
 const ORDENS: OrdemRanking[] = ['dec_aprox', 'fec_aprox', 'variacao'];
+
+export class CompetenciasController {
+  constructor(private readonly service: CompetenciasService) {}
+
+  listar = async (_req: Request, res: Response): Promise<void> => {
+    res.json(await this.service.listar());
+  };
+}
 
 export class BoletimController {
   constructor(private readonly service: BoletimService) {}

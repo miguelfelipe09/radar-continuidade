@@ -47,26 +47,36 @@ export class ContextoRepository {
     };
   }
 
-  /** Competência anterior com detecção, **independente da execução**.
+  /** O mês **imediatamente anterior**, se tiver detecção — e nulo se não
+   *  tiver.
    *
-   *  Numa carga mensal real cada ingestão cria uma execução e detecta só a
-   *  competência nova. Procurar a anterior dentro da mesma execução deixaria
-   *  o delta vazio em toda carga — ou, pior, apontaria para uma competência
-   *  não adjacente quando a execução detectou vários meses fora de ordem. */
+   *  Não é "a detecção anterior mais próxima". Numa instalação limpa cada
+   *  ingestão detectava só a última competência do próprio arquivo, e
+   *  julho/2026 tinha como vizinha detectada dezembro/2025: o boletim
+   *  comparava os dois, rotulava como competência anterior e listava como
+   *  "pioraram" conjuntos que estavam em moderada sete meses antes. Nulo aqui
+   *  faz a tela dizer que não há com o que comparar. */
   async anterior(ctx: ContextoExecucao): Promise<{ ano: number; mes: number } | null> {
-    const { rows } = await this.pool.query<{
-      competencia_ano: number;
-      competencia_mes: number;
-    }>(
-      `SELECT competencia_ano, competencia_mes
-         FROM anomalias
-        WHERE (competencia_ano * 100 + competencia_mes) < ($1 * 100 + $2)
-        GROUP BY competencia_ano, competencia_mes
-        ORDER BY competencia_ano DESC, competencia_mes DESC
+    const ano = ctx.mes === 1 ? ctx.ano - 1 : ctx.ano;
+    const mes = ctx.mes === 1 ? 12 : ctx.mes - 1;
+    const { rows } = await this.pool.query(
+      `SELECT 1 FROM anomalias
+        WHERE competencia_ano = $1 AND competencia_mes = $2
         LIMIT 1`,
-      [ctx.ano, ctx.mes],
+      [ano, mes],
     );
-    if (!rows[0]) return null;
-    return { ano: rows[0].competencia_ano, mes: rows[0].competencia_mes };
+    return rows.length > 0 ? { ano, mes } : null;
+  }
+
+  /** Competências que têm detecção gravada, da mais recente para a mais
+   *  antiga. É o que o seletor pode oferecer: mês sem detecção não tem fila
+   *  nem boletim para mostrar. */
+  async competencias(): Promise<Array<{ ano: number; mes: number }>> {
+    const { rows } = await this.pool.query<{ ano: number; mes: number }>(
+      `SELECT DISTINCT competencia_ano AS ano, competencia_mes AS mes
+         FROM anomalias
+        ORDER BY 1 DESC, 2 DESC`,
+    );
+    return rows;
   }
 }

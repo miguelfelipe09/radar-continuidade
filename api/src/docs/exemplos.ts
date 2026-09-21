@@ -5,6 +5,7 @@
  * uma chamada que rodou é número que alguém vai acreditar.
  *
  * Chamadas usadas:
+ *   competencias: /api/v1/competencias
  *   boletim: /api/v1/boletim
  *   ranking: /api/v1/ranking?limite=3
  *   fila: /api/v1/fila?severidade=alta,moderada&tamanho=2
@@ -13,6 +14,45 @@
  */
 
 export const exemplos: Record<string, unknown> = {
+  "competencias": {
+    "competencias": [
+      {
+        "ano": 2026,
+        "mes": 7,
+        "rotulo": "2026-07"
+      },
+      {
+        "ano": 2026,
+        "mes": 6,
+        "rotulo": "2026-06"
+      },
+      {
+        "ano": 2026,
+        "mes": 5,
+        "rotulo": "2026-05"
+      },
+      {
+        "ano": 2026,
+        "mes": 4,
+        "rotulo": "2026-04"
+      },
+      {
+        "ano": 2026,
+        "mes": 3,
+        "rotulo": "2026-03"
+      },
+      {
+        "ano": 2026,
+        "mes": 2,
+        "rotulo": "2026-02"
+      },
+      {
+        "ano": 2026,
+        "mes": 1,
+        "rotulo": "2026-01"
+      }
+    ]
+  },
   "boletim": {
     "competencia": {
       "ano": 2026,

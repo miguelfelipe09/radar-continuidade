@@ -11,6 +11,7 @@ import { writeFileSync } from 'node:fs';
 const base = process.argv[2] ?? 'http://localhost:3001';
 
 const chamadas = {
+  competencias: '/api/v1/competencias',
   boletim: '/api/v1/boletim',
   ranking: '/api/v1/ranking?limite=3',
   fila: '/api/v1/fila?severidade=alta,moderada&tamanho=2',

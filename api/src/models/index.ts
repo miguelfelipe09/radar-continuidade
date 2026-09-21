@@ -245,6 +245,11 @@ export interface RespostaConjunto {
   alimentadores_disponiveis: boolean;
 }
 
+/** Competências com detecção gravada, da mais recente para a mais antiga. */
+export interface RespostaCompetencias {
+  competencias: Competencia[];
+}
+
 export interface RespostaErro {
   erro: { codigo: string; mensagem: string };
 }

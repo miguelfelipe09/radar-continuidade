@@ -296,6 +296,41 @@ export const openapi = {
     { name: 'Conjuntos', description: 'Detalhe de um conjunto' },
   ],
   paths: {
+    '/competencias': {
+      get: {
+        tags: ['Boletim'],
+        summary: 'Competências com detecção',
+        description: [
+          'Competências que têm detecção gravada, da mais recente para a mais',
+          'antiga. É a lista que o seletor da interface oferece: competência sem',
+          'detecção não tem fila nem boletim para mostrar.',
+          '',
+          'A ingestão detecta todas as competências do arquivo que já têm 12',
+          'meses de histórico — antes disso todo conjunto cairia em',
+          '`sem_baseline`. Por isso o primeiro ano do recorte não aparece aqui.',
+        ].join('\n'),
+        responses: {
+          200: {
+            description: 'Lista de competências.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    competencias: {
+                      type: 'array',
+                      items: { $ref: '#/components/schemas/Competencia' },
+                    },
+                  },
+                },
+                example: exemplos.competencias,
+              },
+            },
+          },
+          500: respostasErro[500],
+        },
+      },
+    },
     '/boletim': {
       get: {
         tags: ['Boletim'],
