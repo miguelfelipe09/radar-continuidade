@@ -14,6 +14,11 @@ import {
   Reincidentes,
 } from '@/componentes/boletim/Destaques';
 
+/** Espelham os limiares da API (config.limiarEventoRegional e
+ *  config.minimoFrotaEventoRegional). */
+const LIMIAR_EVENTO_REGIONAL = 0.5;
+const FROTA_MINIMA = 10;
+
 export function Boletim({ competencia }: { competencia: string }) {
   const [dados, setDados] = useState<RespostaBoletim | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -42,9 +47,14 @@ export function Boletim({ competencia }: { competencia: string }) {
   if (!dados) return <BoletimCarregando />;
 
   const { cobertura, destaques, delta } = dados;
+
+  // As duas condições ficam explícitas aqui, e não só implícitas na consulta
+  // da API: saturação alta sem frota é aritmética de frota pequena — uma
+  // distribuidora de um conjunto satura em 100% com um alerta só.
+  const s = destaques.maior_saturacao;
   const eventoRegional =
-    destaques.maior_saturacao && destaques.maior_saturacao.saturacao_frota >= 0.5
-      ? destaques.maior_saturacao
+    s && s.saturacao_frota >= LIMIAR_EVENTO_REGIONAL && s.avaliados >= FROTA_MINIMA
+      ? s
       : null;
 
   return (
