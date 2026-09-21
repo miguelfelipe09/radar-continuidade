@@ -1,3 +1,4 @@
+import { config } from '../config';
 import { erroNaoEncontrado } from '../middlewares/erro';
 import { formatarCnpj, rotulo } from '../middlewares/validacao';
 import { RespostaBoletim, Severidade } from '../models';
@@ -33,7 +34,12 @@ export class BoletimService {
       await Promise.all([
         this.boletimRepo.carga(ctx.runId),
         this.boletimRepo.contagens(ctx.runId, ctx.ano, ctx.mes),
-        this.boletimRepo.distribuidoraMaiorSaturacao(ctx.runId, ctx.ano, ctx.mes),
+        this.boletimRepo.distribuidoraMaiorSaturacao(
+          ctx.runId,
+          ctx.ano,
+          ctx.mes,
+          config.minimoFrotaEventoRegional,
+        ),
         this.boletimRepo.distribuidorasAusentes(ctx.runId, ctx.ano, ctx.mes),
         this.contextoRepo.anterior(ctx),
         this.filaRepo.listar({

@@ -43,10 +43,14 @@ export class BoletimRepository {
     return rows;
   }
 
+  /** A distribuidora de maior saturação **entre as que têm frota suficiente**.
+   *  Sem o piso, o destaque seria sempre de uma distribuidora de um conjunto,
+   *  que satura em 100% com um alerta só. */
   async distribuidoraMaiorSaturacao(
     runId: number,
     ano: number,
     mes: number,
+    frotaMinima: number,
   ): Promise<{
     cnpj: string;
     sigla: string;
@@ -64,9 +68,10 @@ export class BoletimRepository {
         WHERE a.pipeline_run_id = $1 AND a.competencia_ano = $2 AND a.competencia_mes = $3
         GROUP BY 1, 2
        HAVING max(a.saturacao_frota) IS NOT NULL
+          AND count(*) FILTER (WHERE a.situacao = 'avaliado') >= $4
         ORDER BY max(a.saturacao_frota) DESC, alertas DESC
         LIMIT 1`,
-      [runId, ano, mes],
+      [runId, ano, mes, frotaMinima],
     );
     return rows[0] ?? null;
   }

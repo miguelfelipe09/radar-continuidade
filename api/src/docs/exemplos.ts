@@ -20,12 +20,12 @@ export const exemplos: Record<string, unknown> = {
       "rotulo": "2026-07"
     },
     "carga": {
-      "run_id": 3,
+      "run_id": 5,
       "status": "sucesso",
-      "finalizado_em": "2026-09-19T11:39:44.093Z",
+      "finalizado_em": "2026-09-21T02:52:04.973Z",
       "arquivo": "interrupcoes-energia-eletrica-2026.parquet",
       "linhas_processadas": 6078331,
-      "linhas_inseridas": 6056734,
+      "linhas_inseridas": 0,
       "linhas_atualizadas": 0,
       "distribuidoras_ausentes": 2
     },
@@ -121,6 +121,8 @@ export const exemplos: Record<string, unknown> = {
           "consumidores_afetados": 22036
         }
       ],
+      "reincidencia_meses": 3,
+      "reincidencia_competencias_com_deteccao": 3,
       "reincidentes": [
         {
           "conjunto": {
@@ -247,6 +249,7 @@ export const exemplos: Record<string, unknown> = {
             "buracos_envio": 0,
             "buracos_conjunto": 0,
             "saturacao_frota": 0.113,
+            "frota_avaliada": 115,
             "evento_regional": false
           }
         },
@@ -279,6 +282,7 @@ export const exemplos: Record<string, unknown> = {
             "buracos_envio": 1,
             "buracos_conjunto": 0,
             "saturacao_frota": 0.5,
+            "frota_avaliada": 78,
             "evento_regional": true
           }
         },
@@ -311,6 +315,7 @@ export const exemplos: Record<string, unknown> = {
             "buracos_envio": 1,
             "buracos_conjunto": 0,
             "saturacao_frota": 0.8257,
+            "frota_avaliada": 109,
             "evento_regional": true
           }
         }
@@ -432,6 +437,7 @@ export const exemplos: Record<string, unknown> = {
           "buracos_envio": 0,
           "buracos_conjunto": 0,
           "saturacao_frota": 0.113,
+          "frota_avaliada": 115,
           "evento_regional": false
         }
       },
@@ -464,6 +470,7 @@ export const exemplos: Record<string, unknown> = {
           "buracos_envio": 1,
           "buracos_conjunto": 0,
           "saturacao_frota": 0.5,
+          "frota_avaliada": 78,
           "evento_regional": true
         }
       }
@@ -508,6 +515,7 @@ export const exemplos: Record<string, unknown> = {
           "buracos_envio": 0,
           "buracos_conjunto": 6,
           "saturacao_frota": null,
+          "frota_avaliada": 0,
           "evento_regional": false
         },
         "motivo_ausencia": "conjunto_encerrado",
@@ -542,6 +550,7 @@ export const exemplos: Record<string, unknown> = {
           "buracos_envio": 0,
           "buracos_conjunto": 6,
           "saturacao_frota": null,
+          "frota_avaliada": 0,
           "evento_regional": false
         },
         "motivo_ausencia": "conjunto_encerrado",
@@ -592,6 +601,7 @@ export const exemplos: Record<string, unknown> = {
         "buracos_envio": 1,
         "buracos_conjunto": 0,
         "saturacao_frota": 0.8257,
+        "frota_avaliada": 109,
         "evento_regional": true
       }
     },

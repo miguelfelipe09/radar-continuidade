@@ -215,9 +215,14 @@ export function EventoRegional({
         </p>
         <p className="mt-1 text-sm text-secondary-foreground">
           <span className="numerico">{inteiro(destaque.alertas)}</span> de{' '}
-          <span className="numerico">{inteiro(destaque.avaliados)}</span> conjuntos
-          avaliados dessa distribuidora estão na fila. Quando a frota inteira sobe junto,
-          costuma ser evento sistêmico ou falha de envio, não rede de um conjunto.
+          <span className="numerico">{inteiro(destaque.avaliados)}</span>{' '}
+          {plural(
+            destaque.avaliados,
+            'conjunto avaliado dessa distribuidora está na fila',
+            'conjuntos avaliados dessa distribuidora estão na fila',
+          )}
+          . Quando a frota inteira sobe junto, costuma ser evento sistêmico ou falha de
+          envio, não rede de um conjunto.
         </p>
       </div>
     </div>

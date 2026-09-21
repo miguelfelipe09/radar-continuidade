@@ -55,7 +55,12 @@ export interface ContextoItem {
   buracos_envio: number;
   buracos_conjunto: number;
   saturacao_frota: number | null;
-  /** Derivado: saturação da frota acima do limiar. */
+  /** Conjuntos avaliados da distribuidora nesta competência — o denominador
+   *  da saturação. */
+  frota_avaliada: number;
+  /** Derivado: saturação acima do limiar **e** frota grande o bastante para
+   *  a saturação significar algo. Uma distribuidora de um conjunto satura em
+   *  100% com um único alerta. */
   evento_regional: boolean;
 }
 

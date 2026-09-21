@@ -81,9 +81,14 @@ export function itemFila(linha: LinhaFila): ItemFila {
       buracos_envio: linha.buracos_envio ?? 0,
       buracos_conjunto: linha.buracos_conjunto ?? 0,
       saturacao_frota: saturacao,
+      frota_avaliada: linha.frota_avaliada,
       // Derivado aqui, não armazenado: é regra de apresentação. Frota
-      // inteira alertando é evento sistêmico, não conjunto com problema.
-      evento_regional: (saturacao ?? 0) >= config.limiarEventoRegional,
+      // inteira alertando é evento sistêmico, não conjunto com problema —
+      // mas só quando há frota: uma distribuidora de um conjunto satura em
+      // 100% com um único alerta.
+      evento_regional:
+        (saturacao ?? 0) >= config.limiarEventoRegional &&
+        linha.frota_avaliada >= config.minimoFrotaEventoRegional,
     },
   };
 

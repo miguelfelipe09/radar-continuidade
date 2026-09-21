@@ -28,6 +28,7 @@ export interface LinhaFila {
   buracos_envio: number | null;
   buracos_conjunto: number | null;
   saturacao_frota: number | null;
+  frota_avaliada: number;
   ultimo_envio_ano: number | null;
   ultimo_envio_mes: number | null;
 }
@@ -68,8 +69,23 @@ const COLUNAS = `
     a.buracos_envio,
     a.buracos_conjunto,
     a.saturacao_frota,
+    coalesce(f.avaliados, 0)      AS frota_avaliada,
     d.ultimo_envio_ano,
     d.ultimo_envio_mes`;
+
+/** Conjuntos avaliados por distribuidora na competência. Sai daqui, e não de
+ *  uma janela sobre as linhas devolvidas, porque a lista pode estar filtrada
+ *  por severidade — contar só o que voltou daria frota errada. */
+const CTE_FROTA = `
+  WITH frota AS (
+      SELECT distribuidora_cnpj,
+             count(*) FILTER (WHERE situacao = 'avaliado')::int AS avaliados
+        FROM anomalias
+       WHERE pipeline_run_id = $1 AND competencia_ano = $2 AND competencia_mes = $3
+       GROUP BY 1
+  )`;
+
+const JOIN_FROTA = `LEFT JOIN frota f ON f.distribuidora_cnpj = a.distribuidora_cnpj`;
 
 /** Ordem da fila: consumidores afetados, não desvio estatístico. Um conjunto
  *  de 200 consumidores com desvio enorme importa menos que um de 80 mil com
@@ -104,10 +120,12 @@ export class FilaRepository {
     const { where, params } = this.condicoes(f);
     params.push(f.limite, f.deslocamento);
     const { rows } = await this.pool.query<LinhaFila>(
-      `SELECT ${COLUNAS}
+      `${CTE_FROTA}
+       SELECT ${COLUNAS}
          FROM anomalias a
          JOIN conjuntos c ON c.conjunto_id = a.conjunto_id
          JOIN distributors d ON d.cnpj = a.distribuidora_cnpj
+         ${JOIN_FROTA}
         WHERE ${where}
         ${ORDEM}
         LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -132,10 +150,12 @@ export class FilaRepository {
     conjuntoId: number,
   ): Promise<LinhaFila | null> {
     const { rows } = await this.pool.query<LinhaFila>(
-      `SELECT ${COLUNAS}
+      `${CTE_FROTA}
+       SELECT ${COLUNAS}
          FROM anomalias a
          JOIN conjuntos c ON c.conjunto_id = a.conjunto_id
          JOIN distributors d ON d.cnpj = a.distribuidora_cnpj
+         ${JOIN_FROTA}
         WHERE a.pipeline_run_id = $1 AND a.competencia_ano = $2
           AND a.competencia_mes = $3 AND a.conjunto_id = $4`,
       [runId, ano, mes, conjuntoId],
