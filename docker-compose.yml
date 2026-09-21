@@ -31,5 +31,18 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  web:
+    build:
+      context: ./web
+      args:
+        # O navegador do usuário fala com a API pelo host, não pela rede
+        # interna do compose.
+        VITE_API_URL: http://localhost:3001
+    ports:
+      - "4173:4173"
+    depends_on:
+      - api
+    restart: unless-stopped
+
 volumes:
   db_data:
