@@ -3,6 +3,7 @@ import { Sidebar } from '@/componentes/layout/Sidebar';
 import { BarraSuperior } from '@/componentes/layout/BarraSuperior';
 import { Pagina, EstadoErro } from '@/componentes/ui/Pagina';
 import { Boletim } from '@/telas/Boletim';
+import { Fila } from '@/telas/Fila';
 import { api, ErroApi } from '@/lib/api';
 import { useRota } from '@/lib/rotas';
 import type { RespostaBoletim } from '@/tipos/api';
@@ -69,7 +70,7 @@ function Conteudo({
 }) {
   switch (rota.tela) {
     case 'fila':
-      return <Pagina titulo="Fila de investigação" subtitulo="Em construção." children={null} />;
+      return <Fila competencia={competencia} />;
     case 'ranking':
       return <Pagina titulo="Ranking das piores" subtitulo="Em construção." children={null} />;
     case 'conjunto':
