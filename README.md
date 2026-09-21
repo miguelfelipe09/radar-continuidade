@@ -97,7 +97,7 @@ fatos com 25 milhões de linhas —, os arquivos Parquet dos três anos somam
 ### 1. Clonar e configurar
 
 ```bash
-git clone <!-- TODO: url do repositório -->
+git clone https://github.com/miguelfelipe09/radar-continuidade.git
 cd radar-continuidade
 cp .env.example .env
 ```
