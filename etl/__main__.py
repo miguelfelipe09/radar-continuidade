@@ -96,7 +96,13 @@ def cmd_ingest(args) -> int:
                     # contra o mês de maior cobertura, que esta carga pode ter
                     # acabado de mudar.
                     resumo = aggregate.agregar(conn)
-                    deteccao = anomalies.detectar(conn, run_id)
+                    # Todas as competências do arquivo com histórico, não só a
+                    # última: o boletim compara com o mês anterior e a
+                    # reincidência olha três meses seguidos.
+                    deteccoes = [
+                        anomalies.detectar(conn, run_id, competencia)
+                        for competencia in anomalies.competencias_detectaveis(conn, ano)
+                    ]
 
                 runs.fechar_run_sucesso(
                     conn_runs, run_id, res.counters,
@@ -108,10 +114,13 @@ def cmd_ingest(args) -> int:
                 print(f"  reconfigurações registradas: {numeros['reconfiguracoes']:,}")
                 print(f"  conjunto-competência:        {resumo['linhas']:,} "
                       f"({resumo['sem_indicador']:,} sem indicador)")
-                ano_c, mes_c = deteccao["competencia"]
-                alertas = sum(n for _, sev, n in deteccao["contagem"]
-                              if sev in ("alta", "moderada"))
-                print(f"  fila {ano_c}-{mes_c:02d}:              {alertas:,} alertas")
+                if not deteccoes:
+                    print("  detecção:                    nenhuma competência com 12 meses de histórico")
+                for deteccao in deteccoes:
+                    ano_c, mes_c = deteccao["competencia"]
+                    alertas = sum(n for _, sev, n in deteccao["contagem"]
+                                  if sev in ("alta", "moderada"))
+                    print(f"  fila {ano_c}-{mes_c:02d}:              {alertas:,} alertas")
                 print(f"  tempo:                       {time.monotonic() - inicio:.1f}s")
             except Exception as erro:
                 runs.fechar_run_falha(conn_runs, run_id, f"{type(erro).__name__}: {erro}")

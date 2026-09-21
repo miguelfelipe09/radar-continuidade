@@ -326,6 +326,36 @@ DO UPDATE SET fator = EXCLUDED.fator
 """
 
 
+def competencias_detectaveis(conn: psycopg.Connection, ano: int) -> list[tuple[int, int]]:
+    """Competências do ano que já têm histórico para a detecção valer.
+
+    Detectar só a última competência do arquivo deixava a instalação limpa sem
+    os meses anteriores: o boletim de julho ficava sem junho para comparar e,
+    pior, achava dezembro do ano anterior como vizinho mais próximo. Aqui são
+    todas as competências do ano com pelo menos MINIMO_PONTOS competências
+    anteriores na base — abaixo disso todo conjunto cairia em sem_baseline e a
+    competência não teria fila para mostrar.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            WITH comps AS (
+                SELECT DISTINCT competencia_ano, competencia_mes
+                  FROM conjunto_competencia
+            )
+            SELECT a.competencia_ano, a.competencia_mes
+              FROM comps a
+             WHERE a.competencia_ano = %s
+               AND (SELECT count(*) FROM comps c
+                     WHERE (c.competencia_ano * 100 + c.competencia_mes)
+                         < (a.competencia_ano * 100 + a.competencia_mes)) >= %s
+             ORDER BY 1, 2
+            """,
+            (ano, MINIMO_PONTOS),
+        )
+        return [(a, m) for a, m in cur.fetchall()]
+
+
 def competencia_mais_recente(conn: psycopg.Connection) -> tuple[int, int]:
     with conn.cursor() as cur:
         cur.execute("""
