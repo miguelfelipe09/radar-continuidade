@@ -1,32 +1,28 @@
-#!/usr/bin/env bash
+#!/bin/sh
 #
 # Aplica as migrations pendentes de db/migrations, em ordem alfabética.
 #
-# Usa o psql de dentro do container do Postgres (docker compose exec), então
-# não exige cliente Postgres nem dependência de migration no host.
+# Roda dentro do serviço `migrate` do docker compose, que sobe junto com o
+# resto no `docker compose up`, aplica o schema e encerra. Não depende de
+# bash nem de cliente Postgres no host: o psql vem da própria imagem do
+# Postgres, e a conexão vem de PGHOST/PGUSER/PGPASSWORD/PGDATABASE.
 #
-#   ./db/migrate.sh
-#
-set -euo pipefail
+set -eu
 
-SERVICO="${DB_SERVICE:-db}"
-USUARIO="${POSTGRES_USER:-app}"
-BANCO="${POSTGRES_DB:-continuidade}"
-
-RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DIR_MIGRATIONS="$RAIZ/db/migrations"
-
-cd "$RAIZ"
+DIR_MIGRATIONS="${DIR_MIGRATIONS:-/db/migrations}"
 
 psql_exec() {
-    docker compose exec -T "$SERVICO" \
-        psql -U "$USUARIO" -d "$BANCO" -v ON_ERROR_STOP=1 "$@"
+    psql -v ON_ERROR_STOP=1 "$@"
 }
 
 echo "Aguardando o Postgres aceitar conexões..."
-for _ in $(seq 1 30); do
-    if docker compose exec -T "$SERVICO" pg_isready -U "$USUARIO" -d "$BANCO" >/dev/null 2>&1; then
-        break
+tentativas=0
+until pg_isready -q; do
+    tentativas=$((tentativas + 1))
+    if [ "$tentativas" -ge 60 ]; then
+        echo "Postgres não respondeu em 60 s:" >&2
+        pg_isready >&2 || true
+        exit 1
     fi
     sleep 1
 done
@@ -40,8 +36,8 @@ psql_exec -q -c "
 
 pendentes=0
 
-shopt -s nullglob
 for arquivo in "$DIR_MIGRATIONS"/*.sql; do
+    [ -e "$arquivo" ] || continue
     nome="$(basename "$arquivo")"
 
     aplicada="$(psql_exec -tAc "SELECT 1 FROM schema_migrations WHERE filename = '$nome'")"

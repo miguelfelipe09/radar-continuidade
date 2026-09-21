@@ -17,6 +17,23 @@ services:
       timeout: 5s
       retries: 5
 
+  # Aplica as migrations pendentes e encerra. Usa a imagem do Postgres só pelo
+  # psql; o script é sh puro, então nada disso depende do shell do host.
+  migrate:
+    image: postgres:16-alpine
+    environment:
+      PGHOST: db
+      PGUSER: app
+      PGPASSWORD: app
+      PGDATABASE: continuidade
+    volumes:
+      - ./db:/db:ro
+    entrypoint: ["sh", "/db/migrate.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   api:
     build: ./api
     ports:
@@ -27,8 +44,8 @@ services:
       DATABASE_URL: postgresql://app:app@db:5432/continuidade
       PORT: 3001
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   web:
