@@ -310,6 +310,12 @@ api/src/
 | `GET /api/v1/fila` | conjuntos que merecem investigação |
 | `GET /api/v1/conjuntos/:id` | histórico e detalhe de um conjunto |
 
+**CORS.** A API responde a chamadas de navegador apenas das origens listadas em
+`CORS_ORIGINS`, separadas por vírgula. O padrão é
+`http://localhost:5173,http://localhost:4173`, que cobre o Vite em
+desenvolvimento e em preview. Origem fora da lista recebe a resposta sem o
+cabeçalho `Access-Control-Allow-Origin`, e o navegador a bloqueia.
+
 **Desempenho medido** (pior de 5 chamadas, cache quente):
 
 ```
