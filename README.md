@@ -7,8 +7,7 @@ A cada nova publicação da base, o sistema identifica quais conjuntos elétrico
 fugiram do próprio comportamento histórico e os apresenta como uma **fila de
 investigação**, ordenada por quantos consumidores foram afetados.
 
-> **Estado atual:** pipeline de dados, banco, detecção de anomalias e API estão
-> completos e funcionando. A interface web está em desenvolvimento.
+![Boletim da carga](docs/boletim.png)
 
 ---
 
@@ -17,6 +16,7 @@ investigação**, ordenada por quantos consumidores foram afetados.
 - [O problema](#o-problema)
 - [A solução](#a-solução)
 - [Como rodar do zero](#como-rodar-do-zero)
+- [Como usar](#como-usar)
 - [Arquitetura](#arquitetura)
 - [Modelo de dados](#modelo-de-dados)
 - [Decisões de projeto](#decisões-de-projeto)
@@ -110,11 +110,12 @@ docker compose up -d --build
 
 | Serviço | Endereço |
 |---|---|
-| PostgreSQL | `localhost:5434` |
+| Interface web | `localhost:4173` |
 | API | `localhost:3001` (documentação em `/docs`) |
+| PostgreSQL | `localhost:5434` |
 
-> A API sobe aqui, mas só responde com dados depois dos passos 3 e 6 — antes
-> disso o schema não existe e o banco está vazio.
+> Os três sobem aqui, mas só respondem com dados depois dos passos 3 e 6 —
+> antes disso o schema não existe e o banco está vazio.
 
 ### 3. Criar o schema
 
@@ -195,13 +196,18 @@ python -m etl ingest --ano 2026
 
 ### 7. Conferir
 
+Abra **http://localhost:4173** — o boletim da competência mais recente deve
+carregar com dados.
+
+Pela linha de comando:
+
 ```bash
 curl http://localhost:3001/health
 curl http://localhost:3001/api/v1/boletim
 ```
 
-Ou abra **http://localhost:3001/docs** e use o botão "Try it out" de qualquer
-rota.
+A documentação da API, com o botão "Try it out" em cada rota, fica em
+**http://localhost:3001/docs**.
 
 ### Demonstração da carga incremental
 
@@ -242,6 +248,37 @@ pipeline: existe só para tornar a demonstração reproduzível.
 
 ---
 
+## Como usar
+
+Quatro telas, cada uma respondendo a uma pergunta. O caminho natural é de cima
+para baixo.
+
+**Boletim da carga** — *o que mudou desde a competência anterior?* Abre com os
+alertas por severidade e a variação contra o mês anterior, e destaca o que a
+fila sozinha não mostra: conjuntos que **pioraram de severidade** e
+**reincidentes**, na fila há três competências seguidas. Traz também as
+distribuidoras que pararam de enviar dados e, quando existe, o evento regional
+da competência.
+
+**Fila de investigação** — *onde olhar agora?* Tabela ordenada por consumidores
+afetados, com filtros de severidade e distribuidora. Quando uma distribuidora
+inteira alerta junto, os conjuntos dela viram um bloco único com a conta à
+vista, em vez de dezenas de linhas soltas. Conjuntos que sumiram da base ficam
+numa seção própria, separados por motivo — falta de dado não é ausência de
+problema.
+
+**Detalhe do conjunto** — *o desvio é real?* Série histórica com a faixa normal
+do conjunto desenhada por baixo, a comparação com o mesmo mês dos anos
+anteriores, as causas em texto bruto e os alimentadores da competência. A faixa
+acompanha a sazonalidade: o limite é mais alto nos meses que já são piores.
+
+**Piores distribuidoras** — *quem está pior, e piorou?* Ranking pelo indicador
+normalizado, com a variação contra o mesmo mês do ano anterior. A posição 1 é a
+pior. Quando a frota da distribuidora mudou entre os dois anos, a comparação
+avisa quanto dela cobre.
+
+---
+
 ## Arquitetura
 
 ```
@@ -257,7 +294,7 @@ PostgreSQL  ──  fatos + agregação + anomalias + histórico de execuções
    API  ──  Node + TypeScript + Express, SQL puro, camadas separadas
       │
       ▼
-   Web  ──  React (em desenvolvimento)
+   Web  ──  React + Vite + TypeScript + Tailwind
 ```
 
 ### ETL
@@ -347,6 +384,7 @@ linhas.
 | `conjunto_reconfiguracoes` | conjunto × competência | redesenhos de conjunto |
 | `distributors` | distribuidora | 52 registros |
 | `municipalities` | município | 5.528 registros |
+| `indice_sazonal` | mês × competência × execução | índice sazonal usado em cada avaliação |
 | `pipeline_runs` | execução | histórico e contadores de cada carga |
 
 A tabela de fatos **não tem chaves estrangeiras**. Com 25 milhões de linhas
@@ -476,6 +514,27 @@ daquela distribuidora que alertaram. Todo mês tem alguma distribuidora entre
 14% e 33%; julho teve 83%. A interface usa esse número para agrupar, sem alterar
 a detecção.
 
+### Decisões do front
+
+**Roteador próprio, não React Router.** São quatro telas e um drill-down;
+trinta linhas de roteamento por hash entregam URL compartilhável e botão
+voltar funcionando, sem mais uma dependência para instalar e versionar.
+
+**CORS escrito à mão.** Vinte linhas no lugar do pacote `cors`, pelo mesmo
+motivo. As origens permitidas vêm de variável de ambiente.
+
+**Tipos copiados da API, com checagem automática.** O front espelha
+`api/src/models/index.ts` em vez de importar por caminho relativo, porque a
+imagem Docker do web não enxerga a pasta da API. Para o espelho não divergir em
+silêncio, `npm run checar-tipos` compara os dois byte a byte e falha se
+diferirem.
+
+**O índice sazonal é gravado pela detecção, não recalculado no gráfico.** O
+baseline vive na escala dessazonalizada, e a série do detalhe mostra DEC bruto:
+desenhar o limite exige converter mês a mês. Recalcular o índice na API criaria
+duas implementações da mesma regra, livres para divergir — foi o que aconteceu
+uma vez com a regra de evento regional, que ficou partida entre API e front.
+
 ---
 
 ## Limitações conhecidas
@@ -509,10 +568,11 @@ conjunto em comum, a variação não é calculada.
 
 ## Próximos passos
 
-**Interface web** — em desenvolvimento. Quatro telas: boletim da carga, ranking,
-fila de investigação e detalhe do conjunto.
-
 Melhorias avaliadas e conscientemente adiadas:
+
+- **Competência na URL.** Hoje ela é estado da aplicação, não endereço: não dá
+  para mandar a alguém o link de uma competência específica, nem abrir o
+  navegador direto nela. É a próxima melhoria da interface.
 
 - **Normalizar a taxonomia de causa** do layout antigo. Uma padronização
   simples reduz de 705 para 286 valores distintos; chegar aos ~34 do layout
@@ -541,8 +601,8 @@ Melhorias avaliadas e conscientemente adiadas:
 | Banco de dados | PostgreSQL 16 |
 | API | Node.js, TypeScript, Express, `pg` |
 | Documentação | OpenAPI 3 + Swagger UI |
-| Interface | React, TypeScript, Vite, Tailwind |
-| Infraestrutura | Docker Compose |
+| Interface | React, TypeScript, Vite, Tailwind, Recharts |
+| Infraestrutura | Docker Compose, nginx (serve o build do front) |
 
 ---
 
@@ -558,7 +618,8 @@ radar-continuidade/
 ├── etl/                   pipeline de dados em Python
 ├── exploracao/            consultas de exploração e ACHADOS.md
 ├── api/                   API em Node/TypeScript
-├── web/                   interface (planejado)
+├── docs/                  imagens do README
+├── web/                   interface em React
 └── docker-compose.yml
 ```
 
@@ -569,4 +630,12 @@ radar-continuidade/
 [Interrupções de Energia Elétrica nas Redes de Distribuição](https://dadosabertos.aneel.gov.br/dataset/interrupcoes-de-energia-eletrica-nas-redes-de-distribuicao)
 — Portal de Dados Abertos da ANEEL. Atualização mensal.
 
-<!-- TODO: se usou IA no desenvolvimento, uma linha aqui declarando -->
+---
+
+## Sobre o desenvolvimento
+
+Este projeto foi desenvolvido com assistência de IA (Claude), usada para
+exploração dos dados, escrita de código e revisão. Todas as decisões de
+modelagem, os limiares estatísticos e os recortes de produto foram tomados e
+verificados por mim — cada número citado aqui e no `ACHADOS.md` veio de uma
+consulta que rodou sobre a base real.

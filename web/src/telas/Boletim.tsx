@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
 import type { RespostaBoletim } from '@/tipos/api';
 import { api, ErroApi } from '@/lib/api';
@@ -79,14 +78,8 @@ export function Boletim({ competencia }: { competencia: string }) {
       }
     >
       <TituloSecao>Alertas por severidade</TituloSecao>
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25 }}
-      >
-        <CardsAlertas boletim={dados} />
-        <ResumoDelta boletim={dados} />
-      </motion.div>
+      <CardsAlertas boletim={dados} />
+      <ResumoDelta boletim={dados} />
 
       {eventoRegional && (
         <>
