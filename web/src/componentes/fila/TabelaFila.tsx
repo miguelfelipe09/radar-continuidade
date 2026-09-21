@@ -246,6 +246,17 @@ export function TabelaFila({
     }
   }
 
+  // O grupo vale pelo que ele soma, não pelo seu maior conjunto: a LIGHT
+  // SESA tem 3,66 milhões de afetados somados e abriria a fila na quinta
+  // posição se fosse ordenada pelo conjunto mais atingido dela.
+  const peso = (bloco: (typeof blocos)[number]) =>
+    bloco.tipo === 'linha'
+      ? (bloco.item.consumidores_afetados ?? 0)
+      : (resumosPorDistribuidora[bloco.cnpj]?.afetados ??
+        bloco.itens.reduce((s, i) => s + (i.consumidores_afetados ?? 0), 0));
+
+  blocos.sort((a, b) => peso(b) - peso(a));
+
   return (
     <div className="overflow-hidden rounded-lg border shadow-card">
       <table className="w-full table-fixed border-collapse">

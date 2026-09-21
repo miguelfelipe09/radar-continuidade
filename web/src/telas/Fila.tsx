@@ -71,9 +71,6 @@ export function Fila({ competencia }: { competencia: string }) {
     ])
       .then(async ([alertas, semDado]) => {
         if (!ativo) return;
-        setItens(alertas.itens ?? []);
-        setTotal(alertas.total);
-        setAusentes(semDado.itens ?? []);
 
         // O cabeçalho do grupo descreve a distribuidora na competência
         // inteira, não o que coube nesta página: composição de severidade e
@@ -103,7 +100,13 @@ export function Fila({ competencia }: { competencia: string }) {
             };
           }),
         );
-        if (ativo) setResumosEvento(resumos);
+        if (!ativo) return;
+        // Tudo de uma vez: a ordenação dos grupos depende dos resumos, e
+        // publicar antes faria a tabela reordenar na frente do usuário.
+        setResumosEvento(resumos);
+        setItens(alertas.itens ?? []);
+        setTotal(alertas.total);
+        setAusentes(semDado.itens ?? []);
       })
       .catch((e: ErroApi) => ativo && setErro(e.message));
 
