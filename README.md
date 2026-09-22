@@ -175,7 +175,7 @@ verificar que os números batem com o
 .venv\Scripts\python.exe -m etl ingest --ano 2026 --dry-run
 ```
 
-**Carga completa (~32 minutos)** — os três anos. É a única que mostra o
+**Carga completa (~33 minutos)** — os três anos. É a única que mostra o
 sistema funcionando:
 
 ```powershell
@@ -189,9 +189,10 @@ primeiro acesso para cada mês. O primeiro ano do recorte (2024) serve só de
 histórico e não é detectado: sem 12 meses anteriores, nenhum conjunto teria
 baseline.
 
-> O tempo é real, medido na máquina de desenvolvimento: 2024 em 665s, 2025 em
-> 713s e 2026 em 571s. Não é travamento — o pipeline processa 25 milhões de
-> registros.
+> O tempo é real, medido na máquina de desenvolvimento a partir de um banco
+> vazio: 2024 em 647s, 2025 em 754s (com as 12 detecções mensais) e 2026 em
+> 576s (com 7), 1.978s no total. Não é travamento — o pipeline processa 25
+> milhões de registros.
 
 **Validação da instalação (~10 minutos)** — carregar só 2026 confirma que o
 pipeline roda de ponta a ponta:
