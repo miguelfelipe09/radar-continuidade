@@ -90,7 +90,7 @@ O espaço se divide assim: o banco fica em **9,4 GB** — quase tudo é a tabela
 fatos com 25 milhões de linhas —, os arquivos Parquet dos três anos somam
 698 MB e as imagens Docker outros ~700 MB.
 
-> Se você só quer inspecionar o pipeline sem gastar disco, o passo 6 tem um
+> Se você só quer inspecionar o pipeline sem gastar disco, o passo 5 tem um
 > modo `--dry-run` que roda a transformação inteira e imprime os contadores
 > **sem gravar nada no banco**. Nesse caso bastam os arquivos Parquet.
 
@@ -114,37 +114,44 @@ docker compose up -d --build
 | API | `localhost:3001` (documentação em `/docs`) |
 | PostgreSQL | `localhost:5434` |
 
-> Os três sobem aqui, mas só respondem com dados depois dos passos 3 e 6 —
-> antes disso o schema não existe e o banco está vazio.
+O schema é criado aqui mesmo: o serviço `migrate` espera o banco ficar
+pronto, aplica as migrations pendentes e encerra — a API só sobe depois que
+ele termina com sucesso. Não há passo manual nem dependência de bash no host.
+Subir de novo não refaz nada; o log dele apenas informa que não há pendências
+(`docker compose logs migrate`).
 
-### 3. Criar o schema
+> Os serviços respondem já neste passo, mas só com dados depois da carga do
+> passo 5 — até lá o banco está vazio.
 
-```bash
-bash db/migrate.sh
-```
+### 3. Preparar o ambiente Python
 
-O script aplica as migrations pendentes em ordem e registra as já aplicadas.
-Rodar de novo não faz nada — ele apenas informa que não há pendências.
+Os comandos chamam o Python do ambiente virtual pelo caminho, sem ativá-lo —
+no Windows, o `activate` pode ser bloqueado pela política de execução de
+scripts do PowerShell.
 
-### 4. Preparar o ambiente Python
+Windows (PowerShell):
 
-```bash
+```powershell
 python -m venv .venv
-
-# Linux/macOS
-source .venv/bin/activate
-# Windows
-.venv\Scripts\activate
-
-pip install -r requirements.txt
+.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-### 5. Baixar os dados da ANEEL
+Linux/macOS:
 
 ```bash
-python -m etl download --ano 2024
-python -m etl download --ano 2025
-python -m etl download --ano 2026
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+Daqui em diante os comandos aparecem na forma do Windows; no Linux/macOS,
+troque `.venv\Scripts\python.exe` por `.venv/bin/python`.
+
+### 4. Baixar os dados da ANEEL
+
+```powershell
+.venv\Scripts\python.exe -m etl download --ano 2024
+.venv\Scripts\python.exe -m etl download --ano 2025
+.venv\Scripts\python.exe -m etl download --ano 2026
 ```
 
 Cerca de 700 MB no total. O comando consulta o catálogo da ANEEL para
@@ -157,25 +164,30 @@ republica os arquivos mensalmente.
 > [dadosabertos.aneel.gov.br](https://dadosabertos.aneel.gov.br/dataset/interrupcoes-de-energia-eletrica-nas-redes-de-distribuicao)
 > e coloque em `data/` com o nome `interrupcoes-energia-eletrica-AAAA.parquet`.
 
-### 6. Carregar
+### 5. Carregar
 
 **Conferir sem carregar** — roda a transformação e imprime os contadores de
 cada regra de tratamento, sem tocar no banco. É a forma mais rápida de
 verificar que os números batem com o
 [`ACHADOS.md`](exploracao/ACHADOS.md):
 
-```bash
-python -m etl ingest --ano 2026 --dry-run
+```powershell
+.venv\Scripts\python.exe -m etl ingest --ano 2026 --dry-run
 ```
 
 **Carga completa (~32 minutos)** — os três anos. É a única que mostra o
 sistema funcionando:
 
-```bash
-python -m etl ingest --ano 2024 --ano 2025 --ano 2026
+```powershell
+.venv\Scripts\python.exe -m etl ingest --ano 2024 --ano 2025 --ano 2026
 ```
 
-A agregação e a detecção rodam automaticamente ao fim de cada ingestão.
+A agregação e a detecção rodam automaticamente ao fim de cada ingestão. A
+detecção cobre **todas as competências do arquivo que já têm 12 meses de
+histórico** — não só a última —, então o boletim e a fila funcionam no
+primeiro acesso para cada mês. O primeiro ano do recorte (2024) serve só de
+histórico e não é detectado: sem 12 meses anteriores, nenhum conjunto teria
+baseline.
 
 > O tempo é real, medido na máquina de desenvolvimento: 2024 em 665s, 2025 em
 > 713s e 2026 em 571s. Não é travamento — o pipeline processa 25 milhões de
@@ -184,17 +196,18 @@ A agregação e a detecção rodam automaticamente ao fim de cada ingestão.
 **Validação da instalação (~10 minutos)** — carregar só 2026 confirma que o
 pipeline roda de ponta a ponta:
 
-```bash
-python -m etl ingest --ano 2026
+```powershell
+.venv\Scripts\python.exe -m etl ingest --ano 2026
 ```
 
 > ⚠️ **Isto não é um atalho para ver o produto.** A detecção exige 12
 > competências de histórico, e 2026 sozinho oferece no máximo 6. Com só esse
-> ano carregado, **nenhum conjunto tem baseline** e a fila de investigação vem
-> vazia, com todos os conjuntos em `sem_baseline`. Serve para conferir que o
-> ETL funciona, não para avaliar o sistema.
+> ano carregado, **nenhuma competência é detectada**: a ingestão avisa
+> "nenhuma competência com 12 meses de histórico" e a interface mostra que
+> ainda não há competência detectada. Serve para conferir que o ETL funciona,
+> não para avaliar o sistema.
 
-### 7. Conferir
+### 6. Conferir
 
 Abra **http://localhost:4173** — o boletim da competência mais recente deve
 carregar com dados.
@@ -205,6 +218,9 @@ Pela linha de comando:
 curl http://localhost:3001/health
 curl http://localhost:3001/api/v1/boletim
 ```
+
+No Windows PowerShell 5.1, `curl` é um apelido do `Invoke-WebRequest`; use
+`curl.exe` para chamar o curl de verdade.
 
 A documentação da API, com o botão "Try it out" em cada rota, fica em
 **http://localhost:3001/docs**.
@@ -221,16 +237,16 @@ Demonstrar isso tem um obstáculo prático: como a ANEEL substitui o arquivo,
 isso com um utilitário que adultera linhas já carregadas, deixando-as como se
 fossem a versão anterior do dado — o arquivo real então as corrige.
 
-```bash
+```powershell
 # 1. primeira carga, como se estivéssemos em maio
-python -m etl ingest --ano 2026 --ate-competencia 2026-05
+.venv\Scripts\python.exe -m etl ingest --ano 2026 --ate-competencia 2026-05
 
 # 2. simula a versão anterior: adultera 1.000 linhas de março
-docker compose exec -T db psql -U app -d continuidade \
-    -f - < db/simular-retificacao.sql
+#    (roda o psql do serviço migrate, que já enxerga a pasta db/)
+docker compose run --rm --entrypoint psql migrate -f /db/simular-retificacao.sql
 
 # 3. segunda carga, com o arquivo completo
-python -m etl ingest --ano 2026
+.venv\Scripts\python.exe -m etl ingest --ano 2026
 ```
 
 A terceira etapa insere as competências novas **e** corrige exatamente as
@@ -306,19 +322,20 @@ tabela final. Nunca há inserção linha a linha.
 
 Comandos disponíveis:
 
-```bash
-python -m etl download   --ano AAAA
-python -m etl ingest     --ano AAAA [--ate-competencia AAAA-MM] [--dry-run]
-python -m etl aggregate
-python -m etl detect     [--competencia AAAA-MM]
+```powershell
+.venv\Scripts\python.exe -m etl download   --ano AAAA
+.venv\Scripts\python.exe -m etl ingest     --ano AAAA [--ate-competencia AAAA-MM] [--dry-run]
+.venv\Scripts\python.exe -m etl aggregate
+.venv\Scripts\python.exe -m etl detect     [--competencia AAAA-MM]
 ```
 
 ### Banco
 
 PostgreSQL com schema versionado em migrations SQL numeradas, aplicadas por um
-script simples (`db/migrate.sh`) que usa o `psql` de dentro do próprio
-container. Sem ferramenta de migration — é uma dependência a menos para
-instalar e explicar.
+script `sh` simples (`db/migrate.sh`) que roda no serviço `migrate` do
+compose, com o `psql` da própria imagem do Postgres. Sem ferramenta de
+migration e sem bash no host — é uma dependência a menos para instalar e
+explicar, e funciona igual no Windows.
 
 ### API
 
@@ -342,6 +359,7 @@ api/src/
 
 | Rota | O que faz |
 |---|---|
+| `GET /api/v1/competencias` | competências com detecção, para o seletor |
 | `GET /api/v1/boletim` | o que mudou desde a carga anterior |
 | `GET /api/v1/ranking` | distribuidoras com pior continuidade |
 | `GET /api/v1/fila` | conjuntos que merecem investigação |
@@ -528,6 +546,10 @@ motivo. As origens permitidas vêm de variável de ambiente.
 imagem Docker do web não enxerga a pasta da API. Para o espelho não divergir em
 silêncio, `npm run checar-tipos` compara os dois byte a byte e falha se
 diferirem.
+
+**O seletor de competência vem da API.** A lista não é fixa no front: só
+entra o que tem detecção gravada. Uma lista fixa oferecia meses que numa
+instalação limpa não existiam — escolhê-los dava erro.
 
 **O índice sazonal é gravado pela detecção, não recalculado no gráfico.** O
 baseline vive na escala dessazonalizada, e a série do detalhe mostra DEC bruto:
