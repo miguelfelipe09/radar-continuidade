@@ -249,8 +249,10 @@ fossem a versão anterior do dado — o arquivo real então as corrige.
 .venv\Scripts\python.exe -m etl ingest --ano 2026 --ate-competencia 2026-05
 
 # 2. simula a versão anterior: adultera 1.000 linhas de março
-#    (roda o psql do serviço migrate, que já enxerga a pasta db/)
-docker compose run --rm --entrypoint psql migrate -f /db/simular-retificacao.sql
+#    (roda o psql do serviço migrate, que já enxerga a pasta db/; o caminho
+#     vai dentro do sh -c porque o Git Bash converteria /db em caminho do
+#     Windows se ele fosse argumento solto)
+docker compose run --rm --entrypoint sh migrate -c 'psql -f /db/simular-retificacao.sql'
 
 # 3. segunda carga, com o arquivo completo
 .venv\Scripts\python.exe -m etl ingest --ano 2026
@@ -265,9 +267,14 @@ atualizadas:      1.000   as linhas que a simulação havia alterado
 inalteradas:  4.621.953   o resto do arquivo, reconhecido como já carregado
 ```
 
-O `db/simular-retificacao.sql` é determinístico — sempre as mesmas 1.000
-linhas —, então o número esperado não depende de sorte. Ele não faz parte do
-pipeline: existe só para tornar a demonstração reproduzível.
+Esses números saíram de uma execução real da sequência acima, partindo de um
+banco com 2024 e 2025 carregados. O `db/simular-retificacao.sql` sempre
+adultera as mesmas 1.000 linhas — ele ordena por `id` —, mas o contador de
+atualizadas pode passar disso: ele conta toda linha do arquivo que difere do
+que está no banco, então qualquer outra divergência prévia entra na conta.
+Se aparecer 1.001, a leitura continua a mesma; o que a demonstração mostra é
+que a recarga corrige o que mudou em vez de duplicar. O script não faz parte
+do pipeline: existe só para tornar a demonstração reproduzível.
 
 ---
 
