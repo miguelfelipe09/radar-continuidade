@@ -13,8 +13,8 @@
 -- Determinístico: sempre as mesmas 1.000 linhas, então o número esperado não
 -- depende de sorte.
 --
---   docker compose exec -T db psql -U app -d continuidade \
---       -f - < db/simular-retificacao.sql
+--   docker compose run --rm --entrypoint psql migrate \
+--       -f /db/simular-retificacao.sql
 -- =====================================================================
 
 BEGIN;
