@@ -297,10 +297,14 @@ vista, em vez de dezenas de linhas soltas. Conjuntos que sumiram da base ficam
 numa seção própria, separados por motivo — falta de dado não é ausência de
 problema.
 
+![Fila de investigação](docs/fila.png)
+
 **Detalhe do conjunto** — *o desvio é real?* Série histórica com a faixa normal
 do conjunto desenhada por baixo, a comparação com o mesmo mês dos anos
 anteriores, as causas em texto bruto e os alimentadores da competência. A faixa
 acompanha a sazonalidade: o limite é mais alto nos meses que já são piores.
+
+![Detalhe do conjunto](docs/conjunto.png)
 
 **Piores distribuidoras** — *quem está pior, e piorou?* Ranking pelo indicador
 normalizado, com a variação contra o mesmo mês do ano anterior. A posição 1 é a
