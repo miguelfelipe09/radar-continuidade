@@ -23,6 +23,9 @@ investigação**, ordenada por quantos consumidores foram afetados.
 - [Limitações conhecidas](#limitações-conhecidas)
 - [Próximos passos](#próximos-passos)
 - [Stack](#stack)
+- [Estrutura do repositório](#estrutura-do-repositório)
+- [Fonte dos dados](#fonte-dos-dados)
+- [Sobre o desenvolvimento](#sobre-o-desenvolvimento)
 
 ---
 
@@ -80,6 +83,9 @@ investiga.
 
 ## Como rodar do zero
 
+No Windows, os comandos assumem o PowerShell. No Prompt de Comando (cmd),
+alguns não funcionam — por exemplo, use `copy` no lugar de `cp`.
+
 ### Pré-requisitos
 
 - Docker e Docker Compose
@@ -102,7 +108,7 @@ cd radar-continuidade
 cp .env.example .env
 ```
 
-### 2. Subir banco e API
+### 2. Subir banco, API e interface
 
 ```bash
 docker compose up -d --build
